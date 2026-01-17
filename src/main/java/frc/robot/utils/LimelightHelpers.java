@@ -855,7 +855,7 @@ public class LimelightHelpers {
     }
 
     System.out.printf("Pose Estimate Information:%n");
-    System.out.printf("Timestamp (Seconds): %.3f%n", pose.timestampSeconds);
+    System.out.printf("TimeSTOOOOOOOOOPPPPPPPPPPPPPPPP (Seconds): %.3f%n", pose.timestampSeconds);
     System.out.printf("Latency: %.3f ms%n", pose.latency);
     System.out.printf("Tag Count: %d%n", pose.tagCount);
     System.out.printf("Tag Span: %.2f meters%n", pose.tagSpan);
