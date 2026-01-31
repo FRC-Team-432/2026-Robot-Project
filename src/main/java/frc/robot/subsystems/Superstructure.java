@@ -6,20 +6,32 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.subsystems.arm.Arm;
 import frc.robot.subsystems.flywheel.Flywheel;
+import frc.robot.subsystems.intake.Intake;
 
 /**
- * Superstructure - Controls the Arm and Flywheel together.
+ * Superstructure - Controls the Arm, Flywheel, and Intake together.
  *
  * <p>This coordinates:
  *
  * <ul>
  *   <li>Arm - Moves horizontal and vertical to position game pieces
  *   <li>Flywheel - Spins the shooter wheels at the right speed
+ *   <li>Intake - Pulls game pieces from the floor into the robot
  * </ul>
  *
- * <p>Instead of controlling the arm and flywheel separately, this gives you simple
- * commands like "score low" or "prepare for shooting" that move both parts together.
+ * <p>Instead of controlling mechanisms separately, this gives you simple
+ * commands like "score low" or "prepare for shooting" that move all parts together.
  * This makes driving easier and ensures everything moves in sync.
+ *
+ * <h2>Why Use a Superstructure?</h2>
+ * <p>Coordinated commands prevent conflicts. For example:
+ * <ul>
+ *   <li>You don't want the intake running while the arm is in the way</li>
+ *   <li>You want to stop the intake when starting to shoot</li>
+ *   <li>The arm should be in position before the flywheel spins up</li>
+ * </ul>
+ *
+ * <p>The Superstructure handles all this coordination so the driver doesn't have to!
  */
 @Logged
 public class Superstructure extends SubsystemBase {
@@ -27,35 +39,46 @@ public class Superstructure extends SubsystemBase {
   // ==================== Subsystems ====================
   private final Arm arm;
   private final Flywheel flywheel;
+  private final Intake intake;
 
   // ==================== Constructor ====================
 
-  public Superstructure(Arm arm, Flywheel flywheel) {
+  /**
+   * Creates a new Superstructure to coordinate all mechanisms.
+   *
+   * @param arm The arm subsystem
+   * @param flywheel The flywheel/shooter subsystem
+   * @param intake The intake subsystem (for collecting game pieces)
+   */
+  public Superstructure(Arm arm, Flywheel flywheel, Intake intake) {
     this.arm = arm;
     this.flywheel = flywheel;
+    this.intake = intake;
   }
 
   // ==================== Coordinated Commands ====================
 
   /**
    * Command to safely stow the robot for transport.
-   * Moves arm to vertical position and stops the flywheel.
+   * Moves arm to vertical position, stops the flywheel, and stops the intake.
    */
   public Command stowCommand() {
     return Commands.parallel(
             arm.vertical(),
-            flywheel.stopCommand())
+            flywheel.stopCommand(),
+            intake.stopCommand())
         .withName("Stow");
   }
 
   /**
-   * Command to stow and wait until both mechanisms reach target.
-   * Waits for arm to reach vertical and flywheel to stop completely.
+   * Command to stow and wait until all mechanisms reach target.
+   * Waits for arm to reach vertical, flywheel to stop, and intake to stop.
    */
   public Command stowAndWaitCommand() {
     return Commands.parallel(
             arm.vertical(),
-            flywheel.stopCommand())
+            flywheel.stopCommand(),
+            intake.stopCommand())
         .andThen(Commands.waitUntil(() -> arm.isAtTarget() && flywheel.isAtTarget()))
         .withName("StowAndWait");
   }
@@ -131,7 +154,10 @@ public class Superstructure extends SubsystemBase {
 
   /**
    * Command to prepare for ground intake.
-   * Moves arm to horizontal position and stops flywheel.
+   * Moves arm to horizontal position, stops flywheel, and stops intake.
+   *
+   * <p>Note: This just POSITIONS the robot for intake. Use the intake buttons
+   * (or intakeFromGroundCommand) to actually run the intake.
    */
   public Command intakeGroundCommand() {
     return Commands.parallel(
@@ -150,6 +176,60 @@ public class Superstructure extends SubsystemBase {
             flywheel.stopCommand())
         .andThen(Commands.waitUntil(() -> arm.isAtTarget() && flywheel.isAtTarget()))
         .withName("IntakeGroundAndWait");
+  }
+
+  // ==================== Intake Coordinated Commands ====================
+
+  /**
+   * Command to run the full ground intake sequence.
+   *
+   * <p>This command:
+   * <ol>
+   *   <li>Moves arm to horizontal (intake position)</li>
+   *   <li>Waits for arm to reach position</li>
+   *   <li>Runs the intake until cancelled</li>
+   *   <li>Stops intake when command ends (from button release or interrupt)</li>
+   * </ol>
+   *
+   * <p><b>Usage:</b> Bind to a button with whileTrue() or toggleOnTrue()
+   * <pre>
+   * joystick.a().whileTrue(superstructure.intakeFromGroundCommand());
+   * </pre>
+   *
+   * @return Command that positions arm and runs intake
+   */
+  public Command intakeFromGroundCommand() {
+    return Commands.sequence(
+            // First: Position the arm
+            arm.horizontal(),
+            // Wait until arm is in position
+            Commands.waitUntil(() -> arm.isAtTarget()),
+            // Then: Run intake (uses startEnd so it stops when command ends)
+            intake.intakeCommand())
+        .withName("IntakeFromGround");
+  }
+
+  /**
+   * Command to eject game pieces from the intake.
+   *
+   * <p>Use this to clear a jam or eject an unwanted game piece.
+   * Works similarly to intakeFromGroundCommand but in reverse.
+   *
+   * @return Command that runs outtake and stops when finished
+   */
+  public Command ejectCommand() {
+    return intake.outtakeCommand().withName("Eject");
+  }
+
+  /**
+   * Command to stop the intake immediately.
+   *
+   * <p>Use this for emergency stops or explicit manual control.
+   *
+   * @return Command that stops the intake
+   */
+  public Command stopIntakeCommand() {
+    return intake.stopCommand().withName("StopIntake");
   }
 
   // ==================== Action Commands ====================
