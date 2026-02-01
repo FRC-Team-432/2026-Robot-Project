@@ -27,8 +27,11 @@ import frc.robot.autonomous.AutoCommands;
 import frc.robot.autonomous.AutoRoutines;
 import frc.robot.autonomous.LinearPathRequest;
 import frc.robot.commands.drive.VisionLockDriveCommand;
+import frc.robot.commands.vision.AimAtTagCommand;
+import frc.robot.commands.vision.DriveToTagDistanceCommand;
 import frc.robot.constants.AllianceConstants;
 import frc.robot.constants.AllianceConstants.Alliance;
+import frc.robot.constants.AprilTagConstants;
 import frc.robot.constants.AutoConstants;
 import frc.robot.constants.DriveConstants;
 import frc.robot.generated.TunerConstants;
@@ -37,6 +40,7 @@ import frc.robot.subsystems.Superstructure;
 import frc.robot.subsystems.arm.Arm;
 import frc.robot.subsystems.arm.ArmSIM;
 import frc.robot.subsystems.climb.Climb;
+import frc.robot.subsystems.climb.ClimbSIM;
 import frc.robot.subsystems.feeder.Feeder;
 import frc.robot.subsystems.feeder.FeederSIM;
 import frc.robot.subsystems.flywheel.Flywheel;
@@ -186,8 +190,8 @@ public class RobotContainer {
   /** Feeder subsystem - moves balls from hopper to shooter. */
   public final Feeder feeder = RobotBase.isSimulation() ? new FeederSIM() : new Feeder();
 
-  /** Climb subsystem - for end-game climbing (STUB - not yet implemented). */
-  public final Climb climb = new Climb();
+  /** Climb subsystem - for end-game climbing (STUB on real robot, simulated in SIM). */
+  public final Climb climb = RobotBase.isSimulation() ? new ClimbSIM() : new Climb();
 
   /** Superstructure coordinator (for arm + flywheel + intake coordination). */
   private final Superstructure superstructure = new Superstructure(arm, flywheel, intake);
@@ -198,12 +202,36 @@ public class RobotContainer {
   public final LimelightSubsystem limelight = new LimelightSubsystem("limelight", drivetrain);
 
   /**
-   * AprilTag tracker - for targeting specific tags (fuel hub).
+   * Front AprilTag tracker - primary camera for targeting.
    *
    * <p>This is separate from the Limelight subsystem because it serves
    * a different purpose: targeting vs localization.
+   *
+   * <p><b>Limelight Configuration:</b> Set the camera name to "limelight-front"
+   * in the Limelight web interface (Settings → Networking → Camera Name).
    */
-  public final AprilTagTracker aprilTagTracker = new AprilTagTracker("limelight");
+  public final AprilTagTracker frontTracker = new AprilTagTracker("limelight-front");
+
+  /**
+   * Back AprilTag tracker - secondary camera for rear visibility.
+   *
+   * <p>Useful when the robot is facing away from the target. The system
+   * can automatically select whichever camera has the best view.
+   *
+   * <p><b>Limelight Configuration:</b> Set the camera name to "limelight-back"
+   * in the Limelight web interface (Settings → Networking → Camera Name).
+   */
+  public final AprilTagTracker backTracker = new AprilTagTracker("limelight-back");
+
+  /**
+   * Primary AprilTag tracker reference - points to the active camera.
+   *
+   * <p>By default this points to the front tracker. Use {@link #getActiveTracker()}
+   * to automatically select the best camera, or manually assign frontTracker/backTracker.
+   *
+   * <p>This field maintains backward compatibility with code that references aprilTagTracker.
+   */
+  public final AprilTagTracker aprilTagTracker = frontTracker;
 
   // ==================== Autonomous Chooser ====================
 
@@ -231,8 +259,9 @@ public class RobotContainer {
     autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
     SmartDashboard.putData("Auto Mode", autoChooser);
 
-    // Set default alliance targeting
-    aprilTagTracker.setAlliance(AllianceConstants.DEFAULT_ALLIANCE);
+    // Set default alliance targeting for BOTH cameras
+    frontTracker.setAlliance(AllianceConstants.DEFAULT_ALLIANCE);
+    backTracker.setAlliance(AllianceConstants.DEFAULT_ALLIANCE);
 
     // Configure all button bindings
     configureDriverBindings();
@@ -354,6 +383,21 @@ public class RobotContainer {
                   System.out.println(
                       "Drive mode: " + (isFieldCentric ? "Field-Centric" : "Robot-Centric"));
                 }));
+
+    // ========== Y: Auto-Aim at Tag (Standalone) ==========
+    // Hold to rotate the robot to center an AprilTag in the camera view.
+    // Unlike vision lock (LT), this ONLY rotates - no driving.
+    // Useful for precise aiming when stationary.
+    driverController
+        .y()
+        .whileTrue(new AimAtTagCommand(aprilTagTracker, drivetrain));
+
+    // ========== X: Drive to Medium Distance from Tag ==========
+    // Hold to drive forward/backward until at optimal shooting distance.
+    // Combines well with auto-aim (Y) - aim first, then adjust distance.
+    driverController
+        .x()
+        .whileTrue(DriveToTagDistanceCommand.withPreset(aprilTagTracker, drivetrain, "medium"));
   }
 
   // ==================== Operator Controls ====================
@@ -419,6 +463,56 @@ public class RobotContainer {
     // ========== B: Drop Robot ==========
     // Hold to lower / descend.
     operatorController.b().whileTrue(climb.dropRobotCommand());
+
+    // ========================= TAG CYCLING (D-PAD) =========================
+    // These let the operator cycle through specific AprilTag IDs for targeting.
+    // Useful when you need to target a specific tag on the field.
+
+    // ========== D-pad Up: Next Tag ID ==========
+    // Press to cycle to the next AprilTag ID.
+    // Cycles: 1 → 2 → 3 → ... → ANY → 1
+    operatorController
+        .povUp()
+        .onTrue(
+            drivetrain.runOnce(
+                () -> {
+                  int current = frontTracker.getTargetTagId();
+                  int next;
+                  if (current == AprilTagConstants.ANY_TAG_ID) {
+                    next = 1; // Wrap from ANY back to 1
+                  } else if (current >= 8) {
+                    next = AprilTagConstants.ANY_TAG_ID; // After 8, go to ANY
+                  } else {
+                    next = current + 1;
+                  }
+                  frontTracker.setTargetTagId(next);
+                  backTracker.setTargetTagId(next);
+                  String display = next == AprilTagConstants.ANY_TAG_ID ? "ANY" : String.valueOf(next);
+                  System.out.println("Now targeting tag: " + display);
+                }));
+
+    // ========== D-pad Down: Previous Tag ID ==========
+    // Press to cycle to the previous AprilTag ID.
+    // Cycles: ANY → 8 → 7 → ... → 1 → ANY
+    operatorController
+        .povDown()
+        .onTrue(
+            drivetrain.runOnce(
+                () -> {
+                  int current = frontTracker.getTargetTagId();
+                  int prev;
+                  if (current == AprilTagConstants.ANY_TAG_ID) {
+                    prev = 8; // Wrap from ANY to highest
+                  } else if (current <= 1) {
+                    prev = AprilTagConstants.ANY_TAG_ID; // Before 1, go to ANY
+                  } else {
+                    prev = current - 1;
+                  }
+                  frontTracker.setTargetTagId(prev);
+                  backTracker.setTargetTagId(prev);
+                  String display = prev == AprilTagConstants.ANY_TAG_ID ? "ANY" : String.valueOf(prev);
+                  System.out.println("Now targeting tag: " + display);
+                }));
   }
 
   // ==================== Autonomous ====================
@@ -452,5 +546,66 @@ public class RobotContainer {
    */
   public double rescaleRotation(double rotation) {
     return Math.copySign(MathUtil.applyDeadband(rotation, DriveConstants.JOYSTICK_DEADBAND), 2);
+  }
+
+  // ==================== Vision Helper Methods ====================
+
+  /**
+   * Gets the best available AprilTag tracker based on tag visibility and distance.
+   *
+   * <p>This method implements smart camera selection:
+   * <ul>
+   *   <li>If only one camera sees a tag, use that camera</li>
+   *   <li>If both cameras see a tag, use the one with the closer tag</li>
+   *   <li>If neither camera sees a tag, return the front camera (default)</li>
+   * </ul>
+   *
+   * <h3>Example Usage:</h3>
+   * <pre>
+   * // Get whichever camera has the best view
+   * AprilTagTracker bestCamera = getActiveTracker();
+   * if (bestCamera.isTagVisible()) {
+   *   double offset = bestCamera.getHorizontalOffset();
+   *   // Use for aiming...
+   * }
+   * </pre>
+   *
+   * @return The AprilTagTracker with the best current view of a target tag
+   */
+  public AprilTagTracker getActiveTracker() {
+    boolean frontSees = frontTracker.isTagVisible();
+    boolean backSees = backTracker.isTagVisible();
+
+    // If only one camera sees a tag, use that one
+    if (frontSees && !backSees) {
+      return frontTracker;
+    }
+    if (backSees && !frontSees) {
+      return backTracker;
+    }
+
+    // If both cameras see a tag, use the one with the closer tag
+    if (frontSees && backSees) {
+      return frontTracker.getDistanceMeters() <= backTracker.getDistanceMeters()
+          ? frontTracker
+          : backTracker;
+    }
+
+    // Neither camera sees a tag - return front as default
+    return frontTracker;
+  }
+
+  /**
+   * Sets the alliance targeting for BOTH front and back cameras.
+   *
+   * <p>When you change alliances, both cameras need to know which tags to look for.
+   * This method updates both trackers at once.
+   *
+   * @param alliance The alliance to target (BLUE or RED)
+   */
+  public void setAlliance(Alliance alliance) {
+    frontTracker.setAlliance(alliance);
+    backTracker.setAlliance(alliance);
+    System.out.println("Both cameras now targeting " + alliance.getDisplayName() + " alliance");
   }
 }
