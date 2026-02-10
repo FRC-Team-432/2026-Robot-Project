@@ -14,12 +14,11 @@ import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.units.measure.AngularVelocity;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Robot;
 import frc.robot.constants.FeederConstants;
 import frc.robot.generated.TunerConstants;
-import frc.robot.utils.TalonFXUtil;
 
 /**
  * Feeder subsystem - Moves balls from hopper to shooter.
@@ -154,17 +153,18 @@ public class Feeder extends SubsystemBase {
     config.Slot0.kP = FeederConstants.kP;
 
     // Apply configuration
-    if (TalonFXUtil.applyConfigWithRetries(motor, config, 3)) {
-      Robot.telemetry().log("Feeder/Config", true);
-    } else {
-      Robot.telemetry().log("Feeder/Config", false);
-    }
+  
+    
   }
 
   // ==================== Periodic ====================
 
   @Override
   public void periodic() {
+     SmartDashboard.putNumber("Feeder/Velocity (RPS)", getVelocity().in(RotationsPerSecond));
+     SmartDashboard.putBoolean("Feeder/Running", isRunning());
+     SmartDashboard.putNumber("Feeder/Current (Amps)", motor.getStatorCurrent().getValueAsDouble());
+  
     // Velocity control handled by motor controller
     // @Logged handles telemetry
   }

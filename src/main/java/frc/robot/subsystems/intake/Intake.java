@@ -14,12 +14,11 @@ import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.units.measure.AngularVelocity;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Robot;
 import frc.robot.constants.IntakeConstants;
 import frc.robot.generated.TunerConstants;
-import frc.robot.utils.TalonFXUtil;
 
 /**
  * Intake subsystem - Roller mechanism for collecting game pieces from the floor.
@@ -208,13 +207,9 @@ public class Intake extends SubsystemBase {
     // Apply the configuration to the motor with automatic retries.
     // CAN communication can sometimes fail, so we retry a few times.
     // Log the result so we can see if configuration succeeded.
-    if (TalonFXUtil.applyConfigWithRetries(motor, config, 3)) {
-      Robot.telemetry().log("Intake/Config", true);
-    } else {
-      Robot.telemetry().log("Intake/Config", false);
       // Note: The robot will still run, but the motor might behave unexpectedly
     }
-  }
+
 
   // ==================== Periodic Methods ====================
 
@@ -233,9 +228,14 @@ public class Intake extends SubsystemBase {
    */
   @Override
   public void periodic() {
+     SmartDashboard.putNumber("Intake/Current Velocity (RPS)", getVelocity().in(RotationsPerSecond));
+     SmartDashboard.putNumber("Intake/Target Velocity (RPS)", getTargetVelocity().in(RotationsPerSecond));
+     SmartDashboard.putBoolean("Intake/At Speed", isAtSpeed());
+     SmartDashboard.putNumber("Intake/Motor Current (Amps)", motor.getStatorCurrent().getValueAsDouble());
+}
     // Velocity control is handled by the TalonFX internally.
     // We could add telemetry here if needed, but @Logged handles most of it.
-  }
+
 
   // ==================== Private Motor Control Methods ====================
   // These are private to enforce command-based control flow

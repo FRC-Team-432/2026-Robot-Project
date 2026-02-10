@@ -258,6 +258,7 @@ public class RobotContainer {
 
     autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
     SmartDashboard.putData("Auto Mode", autoChooser);
+    SmartDashboard.putData("Intake Subsystem", intake);
 
     // Set default alliance targeting for BOTH cameras
     frontTracker.setAlliance(AllianceConstants.DEFAULT_ALLIANCE);

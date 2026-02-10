@@ -12,14 +12,11 @@ import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
-import edu.wpi.first.epilogue.logging.EpilogueBackend;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Robot;
 import frc.robot.constants.FlywheelConstants;
 import frc.robot.generated.TunerConstants;
-import frc.robot.utils.TalonFXUtil;
 
 @Logged
 public class Flywheel extends SubsystemBase {
@@ -50,14 +47,11 @@ public class Flywheel extends SubsystemBase {
     // Speed limits from FlywheelConstants
     config.MotionMagic.MotionMagicCruiseVelocity = FlywheelConstants.MOTION_MAGIC_CRUISE_VELOCITY;
     config.MotionMagic.MotionMagicAcceleration = FlywheelConstants.MOTION_MAGIC_ACCELERATION;
+  }
 
     // Apply configuration with retries
-    if (TalonFXUtil.applyConfigWithRetries(leader, config, 2)) {
-      Robot.telemetry().log("Flywheel/Config", true);
-    } else {
-      Robot.telemetry().log("Flywheel/Config", false);
-    }
-  }
+   
+
 
   @Override
   public void periodic() {

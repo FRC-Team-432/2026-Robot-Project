@@ -15,13 +15,10 @@ import com.ctre.phoenix6.signals.GravityTypeValue;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
-import edu.wpi.first.math.util.Units;
 import edu.wpi.first.units.measure.Angle;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Robot;
 import frc.robot.constants.ArmConstants;
-import frc.robot.utils.TalonFXUtil;
 
 @Logged
 public class Arm extends SubsystemBase {
@@ -62,11 +59,6 @@ public class Arm extends SubsystemBase {
     config.Feedback.withRemoteCANcoder(encoder);
 
     // Apply configuration with retries
-    if (TalonFXUtil.applyConfigWithRetries(leader, config)) {
-      Robot.telemetry().log("Arm/Config", true);
-    } else {
-      Robot.telemetry().log("Arm/Config", false);
-    }
   }
 
   @Override

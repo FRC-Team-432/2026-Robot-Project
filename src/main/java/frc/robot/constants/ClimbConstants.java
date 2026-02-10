@@ -7,11 +7,6 @@ package frc.robot.constants;
 /**
  * Constants for the Climb subsystem (robot climbing mechanism).
  *
- * <h2>STUB FILE - NOT YET IMPLEMENTED</h2>
- * <p>This file contains placeholder values for the climb system.
- * The climb subsystem will be implemented later once the hardware
- * is finalized and tested.
- *
  * <h2>What is Climbing?</h2>
  * <p>At the end of FRC matches, robots can earn extra points by climbing
  * onto elevated structures. Our climb system has two mechanisms:
@@ -43,78 +38,116 @@ package frc.robot.constants;
  *           ──╲  arm flips DOWN (A button)
  * </pre>
  *
- * <h2>Current Status</h2>
- * <p>The climb commands currently do nothing (placeholder stubs).
- * To implement climbing:
- * <ol>
- *   <li>Update the motor CAN IDs below</li>
- *   <li>Add motor objects to Climb.java</li>
- *   <li>Implement the control logic in each command</li>
- *   <li>Test carefully with the robot on blocks!</li>
- * </ol>
- *
- * @see frc.robot.subsystems.climb.Climb for the climb subsystem stub
+ * @see frc.robot.subsystems.climb.Climb for the climb subsystem
  */
 public final class ClimbConstants {
 
   // ==================== Hardware Configuration ====================
-  // PLACEHOLDER VALUES - Update when climb hardware is finalized!
 
   /**
    * CAN ID for the lift/winch motor.
-   *
-   * <p><b>PLACEHOLDER</b> - Update with actual CAN ID when hardware is ready.
    */
   public static final int LIFT_MOTOR_CAN_ID = 26;
 
   /**
    * CAN ID for the flip/arm motor.
-   *
-   * <p><b>PLACEHOLDER</b> - Update with actual CAN ID when hardware is ready.
    */
   public static final int FLIP_MOTOR_CAN_ID = 27;
 
+  // ==================== Motor Direction ====================
+
+  /**
+   * Whether the lift motor should be inverted.
+   * 
+   * <p>Set to true if positive values make the robot go DOWN instead of UP.
+   */
+  public static final boolean LIFT_MOTOR_INVERTED = false;
+
+  /**
+   * Whether the flip motor should be inverted.
+   * 
+   * <p>Set to true if positive values make the arm flip DOWN instead of UP.
+   */
+  public static final boolean FLIP_MOTOR_INVERTED = false;
+
   // ==================== Speed Setpoints ====================
-  // PLACEHOLDER VALUES - Tune these once climb is implemented!
 
   /**
    * Speed for lifting the robot (rotations per second).
    *
-   * <p><b>PLACEHOLDER</b> - Start slow and increase carefully!
+   * <p>Start slow and increase carefully during testing!
    */
   public static final double LIFT_SPEED_RPS = 10.0;
 
   /**
    * Speed for dropping/lowering the robot (rotations per second).
    *
-   * <p><b>PLACEHOLDER</b> - Should be negative to run motor in reverse.
-   * Lower speed than lifting for controlled descent.
+   * <p>Negative to run motor in reverse. Lower speed for controlled descent.
    */
   public static final double DROP_SPEED_RPS = -5.0;
 
   /**
    * Speed for flipping the arm up (rotations per second).
-   *
-   * <p><b>PLACEHOLDER</b>
    */
   public static final double FLIP_UP_SPEED_RPS = 15.0;
 
   /**
    * Speed for flipping the arm down (rotations per second).
    *
-   * <p><b>PLACEHOLDER</b> - Should be negative for reverse direction.
+   * <p>Negative for reverse direction.
    */
   public static final double FLIP_DOWN_SPEED_RPS = -10.0;
 
   // ==================== Current Limits ====================
 
   /**
-   * Maximum current for climb motors (Amps).
+   * Maximum current for LIFT motor (Amps).
    *
    * <p>Climb motors may need high current to lift the robot weight.
-   * <b>PLACEHOLDER</b> - Adjust based on actual motor load.
    */
-  public static final double CURRENT_LIMIT_AMPS = 80.0;
+  public static final double LIFT_CURRENT_LIMIT_AMPS = 80.0;
+
+  /**
+   * Maximum current for FLIP motor (Amps).
+   */
+  public static final double FLIP_CURRENT_LIMIT_AMPS = 60.0;
+
+  // ==================== Velocity Control Gains ====================
+  // These control how the motors reach and maintain target speeds
+
+  // ----- Lift Motor Gains -----
+
+  /**
+   * Static friction compensation for lift motor.
+   */
+  public static final double LIFT_kS = 0.1;
+
+  /**
+   * Velocity feedforward for lift motor.
+   */
+  public static final double LIFT_kV = 0.12;
+
+  /**
+   * Proportional gain for lift motor.
+   */
+  public static final double LIFT_kP = 0.5;
+
+  // ----- Flip Motor Gains -----
+
+  /**
+   * Static friction compensation for flip motor.
+   */
+  public static final double FLIP_kS = 0.1;
+
+  /**
+   * Velocity feedforward for flip motor.
+   */
+  public static final double FLIP_kV = 0.12;
+
+  /**
+   * Proportional gain for flip motor.
+   */
+  public static final double FLIP_kP = 0.5;
 
   // ==================== Private Constructor ====================
 

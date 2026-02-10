@@ -14,12 +14,11 @@ import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.units.measure.AngularVelocity;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Robot;
 import frc.robot.constants.ShooterConstants;
 import frc.robot.generated.TunerConstants;
-import frc.robot.utils.TalonFXUtil;
 
 /**
  * Shooter subsystem - Dual flywheel system for launching balls.
@@ -182,11 +181,8 @@ public class Shooter extends SubsystemBase {
     configureMotor(bottomConfig, ShooterConstants.BOTTOM_MOTOR_INVERTED);
 
     // ----- Apply Configurations -----
-    boolean topSuccess = TalonFXUtil.applyConfigWithRetries(topMotor, topConfig, 3);
-    boolean bottomSuccess = TalonFXUtil.applyConfigWithRetries(bottomMotor, bottomConfig, 3);
 
-    Robot.telemetry().log("Shooter/TopMotorConfig", topSuccess);
-    Robot.telemetry().log("Shooter/BottomMotorConfig", bottomSuccess);
+  
   }
 
   /**
@@ -232,6 +228,12 @@ public class Shooter extends SubsystemBase {
    */
   @Override
   public void periodic() {
+    SmartDashboard.putNumber("Shooter/Top Velocity (RPS)", getTopVelocityRPS());
+    SmartDashboard.putNumber("Shooter/Bottom Velocity (RPS)", getBottomVelocityRPS());
+    SmartDashboard.putNumber("Shooter/Target Velocity (RPS)", getTargetVelocityRPS());
+    SmartDashboard.putBoolean("Shooter/At Speed", isAtSpeed());
+    SmartDashboard.putNumber("Shooter/Top Current (Amps)", topMotor.getStatorCurrent().getValueAsDouble());
+    SmartDashboard.putNumber("Shooter/Bottom Current (Amps)", bottomMotor.getStatorCurrent().getValueAsDouble());
     // Motor controllers handle velocity control internally
     // @Logged handles telemetry
   }

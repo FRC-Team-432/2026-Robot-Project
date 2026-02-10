@@ -12,7 +12,6 @@ import edu.wpi.first.wpilibj.simulation.BatterySim;
 import edu.wpi.first.wpilibj.simulation.RoboRioSim;
 import edu.wpi.first.wpilibj.simulation.SingleJointedArmSim;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import frc.robot.Robot;
 import frc.robot.utils.MechanismUtil;
 import frc.robot.utils.TalonFXUtil;
 
@@ -146,7 +145,6 @@ public class ArmSIM extends Arm {
     updateVisualization();
 
     // Publish sim-specific telemetry (other values are auto-logged from base class)
-    Robot.telemetry().log("Arm Sim Current (A)", armSim.getCurrentDrawAmps());
   }
 
   /**

@@ -4,18 +4,15 @@
 
 package frc.robot;
 
-import edu.wpi.first.epilogue.Epilogue;
 import edu.wpi.first.epilogue.Logged;
-import edu.wpi.first.epilogue.logging.EpilogueBackend;
-import edu.wpi.first.epilogue.logging.NTEpilogueBackend;
-import edu.wpi.first.networktables.NetworkTableInstance;
+
 import edu.wpi.first.wpilibj.DataLogManager;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 import com.ctre.phoenix6.HootAutoReplay;
-import com.ctre.phoenix6.HootEpilogueBackend;
+
 
 /**
  * Main robot class - this is where everything starts.
@@ -43,11 +40,6 @@ public class Robot extends TimedRobot {
   public Robot() {
     m_robotContainer = new RobotContainer();
     DataLogManager.start();
-    Epilogue.configure(
-        config -> config.backend = EpilogueBackend.multi(
-            new HootEpilogueBackend(),
-            new NTEpilogueBackend(NetworkTableInstance.getDefault())));
-    Epilogue.bind(this);
   }
 
   @Override
@@ -115,7 +107,6 @@ public class Robot extends TimedRobot {
   public void testExit() {
   }
 
-  public static EpilogueBackend telemetry() {
-    return Epilogue.getConfig().backend;
+ 
   }
-}
+
