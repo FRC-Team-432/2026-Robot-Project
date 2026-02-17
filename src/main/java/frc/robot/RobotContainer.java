@@ -9,7 +9,7 @@ import static edu.wpi.first.units.Units.*;
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveModule.SteerRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
-import com.ctre.phoenix6.swerve.utility.WheelForceCalculator;
+//import com.ctre.phoenix6.swerve.utility.WheelForceCalculator;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
@@ -17,26 +17,26 @@ import edu.wpi.first.math.Vector;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.numbers.N2;
-import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
+//import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import frc.robot.autonomous.AutoCommands;
-import frc.robot.autonomous.AutoRoutines;
-import frc.robot.autonomous.LinearPathRequest;
+// import frc.robot.autonomous.AutoCommands;
+// import frc.robot.autonomous.AutoRoutines;
+// import frc.robot.autonomous.LinearPathRequest;
 import frc.robot.commands.drive.VisionLockDriveCommand;
 import frc.robot.commands.vision.AimAtTagCommand;
 import frc.robot.commands.vision.DriveToTagDistanceCommand;
 import frc.robot.constants.AllianceConstants;
 import frc.robot.constants.AllianceConstants.Alliance;
 import frc.robot.constants.AprilTagConstants;
-import frc.robot.constants.AutoConstants;
+//import frc.robot.constants.AutoConstants;
 import frc.robot.constants.DriveConstants;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
-import frc.robot.subsystems.Superstructure;
+//import frc.robot.subsystems.Superstructure;
 import frc.robot.subsystems.arm.Arm;
 import frc.robot.subsystems.arm.ArmSIM;
 import frc.robot.subsystems.climb.Climb;
@@ -153,23 +153,28 @@ public class RobotContainer {
    * swerve drive math. We just tell it "go this direction at this speed"
    * and it figures out how to move each of the 4 modules.
    */
-  public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
+   
+   public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
+
+   
+
+
 
   // ==================== Autonomous ====================
 
-  public final AutoCommands autoCommands =
-      new AutoCommands(
-          drivetrain,
-          new LinearPathRequest(
-              new Constraints(
-                  AutoConstants.MAX_LINEAR_VELOCITY_MPS, AutoConstants.MAX_LINEAR_ACCELERATION_MPS2),
-              new Constraints(
-                  AutoConstants.MAX_ANGULAR_VELOCITY_RAD_S,
-                  AutoConstants.MAX_ANGULAR_ACCELERATION_RAD_S2),
-              new WheelForceCalculator(
-                  drivetrain.getModuleLocations(),
-                  Pounds.of(AutoConstants.ROBOT_MASS_LBS),
-                  KilogramSquareMeters.of(AutoConstants.MOMENT_OF_INERTIA_KG_M2))));
+  //public final AutoCommands autoCommands =
+      // new //AutoCommands(
+      //     //drivetrain,
+      //     //new LinearPathRequest(
+      //         //new Constraints(
+      //             AutoConstants.MAX_LINEAR_VELOCITY_MPS, AutoConstants.MAX_LINEAR_ACCELERATION_MPS2),
+      //         new Constraints(
+      //             AutoConstants.MAX_ANGULAR_VELOCITY_RAD_S,
+      //             AutoConstants.MAX_ANGULAR_ACCELERATION_RAD_S2),
+      //         new WheelForceCalculator(
+      //             drivetrain.getModuleLocations(),
+      //             Pounds.of(AutoConstants.ROBOT_MASS_LBS),
+      //             KilogramSquareMeters.of(AutoConstants.MOMENT_OF_INERTIA_KG_M2))));
 
   // ==================== Mechanism Subsystems ====================
   // These use the Hardware/SIM pattern - automatically uses simulation
@@ -194,7 +199,7 @@ public class RobotContainer {
   public final Climb climb = RobotBase.isSimulation() ? new ClimbSIM() : new Climb();
 
   /** Superstructure coordinator (for arm + flywheel + intake coordination). */
-  private final Superstructure superstructure = new Superstructure(arm, flywheel, intake);
+  //private final Superstructure superstructure = new Superstructure(arm, flywheel, intake);
 
   // ==================== Vision Subsystems ====================
 
@@ -236,7 +241,7 @@ public class RobotContainer {
   // ==================== Autonomous Chooser ====================
 
   private final SendableChooser<Command> autoChooser;
-  private final AutoRoutines autoRoutines;
+  //private final AutoRoutines autoRoutines;
 
   // ==================== Constructor ====================
 
@@ -254,9 +259,9 @@ public class RobotContainer {
   public RobotContainer() {
     // Set up autonomous routines
     autoChooser = new SendableChooser<>();
-    autoRoutines = new AutoRoutines(autoCommands, superstructure);
+    //autoRoutines = new AutoRoutines(autoCommands, superstructure);
 
-    autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
+    //autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
     SmartDashboard.putData("Auto Mode", autoChooser);
     SmartDashboard.putData("Intake Subsystem", intake);
 
