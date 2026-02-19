@@ -7,6 +7,7 @@ import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Robot;
 import frc.robot.constants.VisionConstants;
@@ -88,6 +89,9 @@ public class LimelightSubsystem extends SubsystemBase {
     // Update recording system (records on real robot, plays back during replay mode)
     autoReplay.update();
 
+    // Log individual AprilTag data to SmartDashboard and console
+    logAprilTagData();
+
     // Use the camera data to update the robot's position
     processInputs();
   }
@@ -157,5 +161,85 @@ public class LimelightSubsystem extends SubsystemBase {
 
   public double getAmbiguity(){
     return ambiguity;
+  }
+
+  // ==================== AprilTag Logging ====================
+
+  private void logAprilTagData() {
+    boolean hasTarget = LimelightHelpers.getTV(limelightName);
+    SmartDashboard.putBoolean("Limelight/HasTarget", hasTarget);
+
+    if (!hasTarget) {
+      SmartDashboard.putNumber("Limelight/TagCount", 0);
+      return;
+    }
+
+    double tx = LimelightHelpers.getTX(limelightName);
+    double ty = LimelightHelpers.getTY(limelightName);
+    double ta = LimelightHelpers.getTA(limelightName);
+
+    SmartDashboard.putNumber("Limelight/TagCount", tagCount);
+    SmartDashboard.putNumber("Limelight/TX", tx);
+    SmartDashboard.putNumber("Limelight/TY", ty);
+    SmartDashboard.putNumber("Limelight/TA", ta);
+    SmartDashboard.putNumber("Limelight/AvgTagDistance", avgTagDistance);
+    SmartDashboard.putNumber("Limelight/Ambiguity", ambiguity);
+
+    LimelightHelpers.RawFiducial[] fiducials =
+        LimelightHelpers.getRawFiducials(limelightName);
+
+    System.out.printf(
+        "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f%n",
+        tagCount, tx, ty, ta, avgTagDistance, ambiguity);
+
+    for (int i = 0; i < fiducials.length; i++) {
+      LimelightHelpers.RawFiducial f = fiducials[i];
+      String prefix = "Limelight/Tag" + i;
+
+      SmartDashboard.putNumber(prefix + "/ID", f.id);
+      SmartDashboard.putNumber(prefix + "/TXNC", f.txnc);
+      SmartDashboard.putNumber(prefix + "/TYNC", f.tync);
+      SmartDashboard.putNumber(prefix + "/Area", f.ta);
+      SmartDashboard.putNumber(prefix + "/DistToCamera", f.distToCamera);
+      SmartDashboard.putNumber(prefix + "/DistToRobot", f.distToRobot);
+      SmartDashboard.putNumber(prefix + "/Ambiguity", f.ambiguity);
+
+      System.out.printf(
+          "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f%n",
+          i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity);
+    }
+  }
+
+  // ==================== Accessors for DriveToTagCommand ====================
+
+  /** Returns true if the Limelight currently sees a valid target. */
+  public boolean hasTarget() {
+    return LimelightHelpers.getTV(limelightName);
+  }
+
+  /** Returns the horizontal offset (TX) to the primary target in degrees. */
+  public double getTargetTX() {
+    return LimelightHelpers.getTX(limelightName);
+  }
+
+  /** Returns the vertical offset (TY) to the primary target in degrees. */
+  public double getTargetTY() {
+    return LimelightHelpers.getTY(limelightName);
+  }
+
+  /** Returns the distance to the nearest visible tag in meters, or -1 if none visible. */
+  public double getNearestTagDistance() {
+    LimelightHelpers.RawFiducial[] fiducials =
+        LimelightHelpers.getRawFiducials(limelightName);
+    if (fiducials.length == 0) {
+      return -1.0;
+    }
+    double minDist = Double.MAX_VALUE;
+    for (LimelightHelpers.RawFiducial f : fiducials) {
+      if (f.distToRobot < minDist) {
+        minDist = f.distToRobot;
+      }
+    }
+    return minDist;
   }
 }
