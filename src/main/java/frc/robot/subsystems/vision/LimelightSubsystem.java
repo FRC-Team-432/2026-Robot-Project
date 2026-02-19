@@ -47,6 +47,10 @@ public class LimelightSubsystem extends SubsystemBase {
   private double avgTagDistance = 0.0; // Average distance to visible tags (meters)
   private double ambiguity = 0.0; // Ambiguity value across all visible tags
 
+  // Throttle logging to ~1Hz (every 50 cycles at 20ms periodic)
+  private int logCounter = 0;
+  private static final int LOG_INTERVAL = 50;
+
   // System that records vision data for playback later
   private final HootAutoReplay autoReplay;
 
@@ -168,10 +172,15 @@ public class LimelightSubsystem extends SubsystemBase {
 
   private void logAprilTagData() {
     boolean hasTarget = LimelightHelpers.getTV(limelightName);
+    boolean shouldLog = (logCounter++ % LOG_INTERVAL == 0);
+
     SmartDashboard.putBoolean("Limelight/HasTarget", hasTarget);
 
     if (!hasTarget) {
       SmartDashboard.putNumber("Limelight/TagCount", 0);
+      if (shouldLog) {
+        DataLogManager.log("[Limelight] No target visible");
+      }
       return;
     }
 
@@ -189,6 +198,7 @@ public class LimelightSubsystem extends SubsystemBase {
     LimelightHelpers.RawFiducial[] fiducials =
         LimelightHelpers.getRawFiducials(limelightName);
 
+    // Always log when a target is visible (useful data, not spammy)
     DataLogManager.log(String.format(
         "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
         tagCount, tx, ty, ta, avgTagDistance, ambiguity));
