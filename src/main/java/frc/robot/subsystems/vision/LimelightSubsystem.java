@@ -7,6 +7,7 @@ import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.wpilibj.DataLogManager;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Robot;
@@ -188,9 +189,9 @@ public class LimelightSubsystem extends SubsystemBase {
     LimelightHelpers.RawFiducial[] fiducials =
         LimelightHelpers.getRawFiducials(limelightName);
 
-    System.out.printf(
-        "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f%n",
-        tagCount, tx, ty, ta, avgTagDistance, ambiguity);
+    DataLogManager.log(String.format(
+        "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
+        tagCount, tx, ty, ta, avgTagDistance, ambiguity));
 
     for (int i = 0; i < fiducials.length; i++) {
       LimelightHelpers.RawFiducial f = fiducials[i];
@@ -204,9 +205,9 @@ public class LimelightSubsystem extends SubsystemBase {
       SmartDashboard.putNumber(prefix + "/DistToRobot", f.distToRobot);
       SmartDashboard.putNumber(prefix + "/Ambiguity", f.ambiguity);
 
-      System.out.printf(
-          "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f%n",
-          i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity);
+      DataLogManager.log(String.format(
+          "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f",
+          i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity));
     }
   }
 
