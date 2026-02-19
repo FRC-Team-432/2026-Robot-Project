@@ -86,10 +86,10 @@ public class RobotContainer {
               Pounds.of(AutoConstants.ROBOT_MASS_LBS),
               KilogramSquareMeters.of(AutoConstants.MOMENT_OF_INERTIA_KG_M2))));
 
-  /* Create subsystems (uses simulated versions when running in simulation) */
-  public final Arm arm = RobotBase.isSimulation() ? new ArmSIM() : new Arm();
-  public final Flywheel flywheel = RobotBase.isSimulation() ? new FlywheelSIM() : new Flywheel();
-  private final Superstructure superstructure = new Superstructure(arm, flywheel);
+  // TODO: Re-enable when arm and flywheel hardware is installed
+  // public final Arm arm = RobotBase.isSimulation() ? new ArmSIM() : new Arm();
+  // public final Flywheel flywheel = RobotBase.isSimulation() ? new FlywheelSIM() : new Flywheel();
+  // private final Superstructure superstructure = new Superstructure(arm, flywheel);
 
   // Vision camera for tracking robot position
   public final LimelightSubsystem limelight =
@@ -98,16 +98,18 @@ public class RobotContainer {
   /* Autonomous mode selector */
   private final SendableChooser<Command> autoChooser;
 
-  private final AutoRoutines autoRoutines;
+  // TODO: Re-enable when superstructure hardware is installed
+  // private final AutoRoutines autoRoutines;
 
   public RobotContainer() {
 
     // Set up autonomous routines
     autoChooser = new SendableChooser<>();
-    autoRoutines = new AutoRoutines(autoCommands, superstructure);
+    // TODO: Re-enable AutoRoutines when superstructure hardware is installed
+    // autoRoutines = new AutoRoutines(autoCommands, superstructure);
 
     // Add autonomous mode options to dashboard
-    autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
+    // autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
 
     SmartDashboard.putData("Auto Mode", autoChooser);
 
