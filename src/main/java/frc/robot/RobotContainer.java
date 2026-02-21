@@ -35,6 +35,9 @@ import frc.robot.subsystems.arm.ArmSIM;
 import frc.robot.subsystems.flywheel.Flywheel;
 // import frc.robot.subsystems.flywheel.Flywheel;
 import frc.robot.subsystems.flywheel.FlywheelSIM;
+import frc.robot.commands.DriveAndLockCommand;
+import frc.robot.commands.FaceTagCommand;
+import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.vision.LimelightSubsystem;
 
 /**
@@ -85,10 +88,14 @@ public class RobotContainer {
               Pounds.of(AutoConstants.ROBOT_MASS_LBS),
               KilogramSquareMeters.of(AutoConstants.MOMENT_OF_INERTIA_KG_M2))));
 
-  /* Create subsystems (uses simulated versions when running in simulation) */
-  public final Arm arm = RobotBase.isSimulation() ? new ArmSIM() : new Arm();
-  public final Flywheel flywheel = RobotBase.isSimulation() ? new FlywheelSIM() : new Flywheel();
-  private final Superstructure superstructure = new Superstructure(arm, flywheel);
+  // TODO: Re-enable when arm and flywheel hardware is installed
+  // public final Arm arm = RobotBase.isSimulation() ? new ArmSIM() : new Arm();
+  // public final Flywheel flywheel = RobotBase.isSimulation() ? new FlywheelSIM() : new Flywheel();
+  // private final Superstructure superstructure = new Superstructure(arm, flywheel);
+
+  // Intake motor for collecting and ejecting game pieces
+  // TODO: Update IntakeConstants.INTAKE_CAN_ID once the motor is wired and assigned
+  public final Intake intake = new Intake();
 
   // Vision camera for tracking robot position
   public final LimelightSubsystem limelight =
@@ -97,16 +104,18 @@ public class RobotContainer {
   /* Autonomous mode selector */
   private final SendableChooser<Command> autoChooser;
 
-  private final AutoRoutines autoRoutines;
+  // TODO: Re-enable when superstructure hardware is installed
+  // private final AutoRoutines autoRoutines;
 
   public RobotContainer() {
 
     // Set up autonomous routines
     autoChooser = new SendableChooser<>();
-    autoRoutines = new AutoRoutines(autoCommands, superstructure);
+    // TODO: Re-enable AutoRoutines when superstructure hardware is installed
+    // autoRoutines = new AutoRoutines(autoCommands, superstructure);
 
     // Add autonomous mode options to dashboard
-    autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
+    // autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
 
     SmartDashboard.putData("Auto Mode", autoChooser);
 
@@ -127,6 +136,21 @@ public class RobotContainer {
                   .withRotationalRate(-rescaleRotation(joystick.getRightX()) * MaxAngularRate);
             }));
 
+    // Intake: left trigger spins intake forward, left bumper ejects in reverse
+    joystick.leftTrigger().whileTrue(intake.intake());
+    joystick.leftBumper().whileTrue(intake.eject());
+
+    // Face hub AprilTag while held — right bumper searches CW
+    joystick.rightBumper().whileTrue(new FaceTagCommand(drivetrain, limelight, -1.0));
+
+    // Drive normally while keeping rotation locked on hub tag — ends when tag leaves view
+    joystick.x().whileTrue(new DriveAndLockCommand(
+        drivetrain,
+        limelight,
+        () -> -rescaleTranslation(joystick.getLeftY(), joystick.getLeftX()).get(0, 0) * MaxSpeed,
+        () -> -rescaleTranslation(joystick.getLeftY(), joystick.getLeftX()).get(1, 0) * MaxSpeed
+    ));
+
     joystick
         .start()
         .onTrue(
@@ -146,6 +170,7 @@ public class RobotContainer {
   }
 
   public double rescaleRotation(double rotation){
-    return Math.copySign(MathUtil.applyDeadband(rotation, 1), 2);
+    double deadbanded = MathUtil.applyDeadband(rotation, 0.1);
+    return Math.copySign(deadbanded * deadbanded, deadbanded);
   }
 }
