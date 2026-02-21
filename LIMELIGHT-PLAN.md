@@ -250,6 +250,104 @@ public static final double DRIVE_TO_TAG_TX_TOLERANCE_DEG = 2.0;
 
 ---
 
+---
+
+## Code-Level Diagnostics (Based on Current Codebase)
+
+These are specific issues found by reading the actual code — distinct from generic hardware problems above.
+
+---
+
+### Issue 1 — Limelight Name Mismatch (MOST LIKELY CAUSE)
+
+**The code hardcodes the name `"limelight"` in `RobotContainer.java`:**
+```java
+public final LimelightSubsystem limelight = new LimelightSubsystem("limelight", drivetrain);
+```
+
+Every NetworkTables call in `LimelightSubsystem` and `LimelightHelpers` uses this name as the NT table prefix. If the physical Limelight is named anything other than `"limelight"` — for example `"limelight2"`, `"limelight3g"`, `"ll"`, etc. — **every call returns 0 or false silently**. The code will never see a target even when the camera is working perfectly.
+
+**How to check:**
+- Open the Limelight web dashboard (`http://limelight.local:5801`)
+- Go to **Settings** (gear icon) → look for the **Name** field
+- The name there must be exactly `limelight` (all lowercase, no spaces)
+
+**Fix option A — rename the device (recommended):**
+- In the web dashboard Settings, change the name to `limelight`
+- Reboot the Limelight
+
+**Fix option B — change the code to match the device's actual name:**
+- In [RobotContainer.java](src/main/java/frc/robot/RobotContainer.java), change `"limelight"` to whatever the device is actually named
+
+---
+
+### Issue 2 — `HasTarget` True but Robot Still Searches (DriveToTagCommand falls through)
+
+Even when `hasTarget()` returns true, `DriveToTagCommand` has a second check at [DriveToTagCommand.java:45](src/main/java/frc/robot/commands/DriveToTagCommand.java#L45):
+
+```java
+double distance = limelight.getNearestTagDistance();
+if (distance < 0) {
+    // falls into SEARCHING mode even though hasTarget() == true
+```
+
+`getNearestTagDistance()` returns `-1` if `getRawFiducials()` returns an empty array. This happens when:
+- The pipeline is not in **Fiducial/AprilTag** mode (a retroreflective or neural pipeline does not populate the `rawfiducials` NT key)
+- The tag is visible to `tv` (used by `hasTarget()`) but the fiducial solver isn't running
+
+**How to confirm:** Check `DriveToTag/Status` on Shuffleboard while holding Left Bumper with a tag visible. If it says `SEARCHING` while `Limelight/HasTarget` is `true`, this is the problem.
+
+**Fix:** In the Limelight web dashboard, confirm the active pipeline type is **Fiducial** (AprilTag), not any other type.
+
+---
+
+### Issue 3 — MegaTag Pose Estimation Needs a Field Map (Separate from Basic Detection)
+
+The code in [LimelightSubsystem.java:107](src/main/java/frc/robot/subsystems/vision/LimelightSubsystem.java#L107) calls:
+```java
+LimelightHelpers.getBotPoseEstimate_wpiBlue(limelightName);
+```
+
+This is **MegaTag1**, which requires the 2026 field layout to be uploaded to the Limelight in order to produce a `tagCount > 0`. Without the field map, `tagCount` stays 0 and no pose measurements get fed to the Kalman filter.
+
+**Importantly:** This does NOT affect `hasTarget()` or `DriveToTagCommand` — those use `getTV()` and `getRawFiducials()` independently. So the robot can snap-to-tag just fine without a field map. Only odometry correction is broken without it.
+
+**Fix for pose estimation:** Upload the 2026 game field map JSON to the Limelight via the web dashboard → **3D** tab → field map upload.
+
+---
+
+### Issue 4 — Ambiguity Crashes If poseEstimate Has Zero Fiducials (Code Bug)
+
+In [LimelightSubsystem.java:114](src/main/java/frc/robot/subsystems/vision/LimelightSubsystem.java#L114):
+```java
+ambiguity = poseEstimate.rawFiducials[0].ambiguity;
+```
+
+This line runs inside `if (poseEstimate != null && poseEstimate.tagCount > 0)`, but `rawFiducials` could still be empty (length 0) if MegaTag returns a non-null estimate with `tagCount > 0` but no fiducial data in the array. This would throw an `ArrayIndexOutOfBoundsException` and crash the subsystem's `periodic()`, which would stop all vision processing silently.
+
+**How to check:** Look at the DriverStation console for a stack trace mentioning `LimelightSubsystem.java:114`.
+
+**Fix:** Add a bounds check before reading `rawFiducials[0]`:
+```java
+if (poseEstimate.rawFiducials != null && poseEstimate.rawFiducials.length > 0) {
+    ambiguity = poseEstimate.rawFiducials[0].ambiguity;
+} else {
+    ambiguity = 0.0;
+}
+```
+
+---
+
+### Diagnostic Checklist — Work Through in Order
+
+1. **Check the Limelight name** in the web dashboard Settings. Must be exactly `limelight`.
+2. **Check `Limelight/HasTarget`** on Shuffleboard with a tag in view. If false → name mismatch or wrong pipeline.
+3. **Check `DriveToTag/Status`** on Shuffleboard while holding Left Bumper. If `SEARCHING` while `HasTarget` is `true` → pipeline not returning fiducial data (Issue 2).
+4. **Check DriverStation console** for any exception mentioning `LimelightSubsystem` → likely Issue 4.
+5. **Check `Limelight/TagCount`** — if `HasTarget` is true but `TagCount` is 0 → no field map loaded (Issue 3, only affects odometry correction).
+
+---
+
 ## Quick Reference — Is It Working?
 
 | Check | Expected |

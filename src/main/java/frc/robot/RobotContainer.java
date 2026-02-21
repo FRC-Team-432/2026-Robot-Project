@@ -36,6 +36,7 @@ import frc.robot.subsystems.flywheel.Flywheel;
 // import frc.robot.subsystems.flywheel.Flywheel;
 import frc.robot.subsystems.flywheel.FlywheelSIM;
 import frc.robot.commands.DriveToTagCommand;
+import frc.robot.commands.FaceTagCommand;
 import frc.robot.subsystems.vision.LimelightSubsystem;
 
 /**
@@ -130,8 +131,8 @@ public class RobotContainer {
                   .withRotationalRate(-rescaleRotation(joystick.getRightX()) * MaxAngularRate);
             }));
 
-    // Drive toward nearest AprilTag while held
-    joystick.leftBumper().whileTrue(new DriveToTagCommand(drivetrain, limelight));
+    // Face nearest AprilTag while held (rotation only)
+    joystick.leftBumper().whileTrue(new FaceTagCommand(drivetrain, limelight));
 
     joystick
         .start()

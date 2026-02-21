@@ -43,6 +43,14 @@ public final class VisionConstants {
   /** Least we'll ever trust rotation measurements (radians) - not confident */
   public static final double MAX_THETA_STD_DEV = 1.0;
 
+  // ==================== Hub AprilTag IDs ====================
+
+  /** AprilTag IDs on the blue alliance hub (left, center) */
+  public static final int[] BLUE_HUB_TAG_IDS = {25, 26};
+
+  /** AprilTag IDs on the red alliance hub (left, center) */
+  public static final int[] RED_HUB_TAG_IDS = {9, 10};
+
   // ==================== Drive-to-Tag Constants ====================
 
   /** Target stopping distance from the AprilTag (meters) */

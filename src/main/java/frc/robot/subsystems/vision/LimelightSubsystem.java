@@ -15,6 +15,7 @@ import frc.robot.constants.VisionConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.utils.LimelightHelpers;
 import java.util.Optional;
+import java.util.OptionalDouble;
 
 /**
  * Limelight camera subsystem for tracking AprilTags and finding the robot's position.
@@ -236,6 +237,25 @@ public class LimelightSubsystem extends SubsystemBase {
   /** Returns the vertical offset (TY) to the primary target in degrees. */
   public double getTargetTY() {
     return LimelightHelpers.getTY(limelightName);
+  }
+
+  /**
+   * Returns the horizontal angle (txnc, degrees) to whichever of the given tag IDs is most
+   * centered in the camera frame. Returns empty if none of the specified tags are visible.
+   */
+  public OptionalDouble getTXForTags(int[] tagIds) {
+    LimelightHelpers.RawFiducial[] fiducials = LimelightHelpers.getRawFiducials(limelightName);
+    double bestTX = Double.NaN;
+    double bestAbsTX = Double.MAX_VALUE;
+    for (LimelightHelpers.RawFiducial f : fiducials) {
+      for (int id : tagIds) {
+        if (f.id == id && Math.abs(f.txnc) < bestAbsTX) {
+          bestTX = f.txnc;
+          bestAbsTX = Math.abs(f.txnc);
+        }
+      }
+    }
+    return Double.isNaN(bestTX) ? OptionalDouble.empty() : OptionalDouble.of(bestTX);
   }
 
   /** Returns the distance to the nearest visible tag in meters, or -1 if none visible. */
