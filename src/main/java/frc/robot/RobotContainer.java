@@ -152,6 +152,7 @@ public class RobotContainer {
   }
 
   public double rescaleRotation(double rotation){
-    return Math.copySign(MathUtil.applyDeadband(rotation, 1), 2);
+    double deadbanded = MathUtil.applyDeadband(rotation, 0.1);
+    return Math.copySign(deadbanded * deadbanded, deadbanded);
   }
 }
