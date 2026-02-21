@@ -1,0 +1,3 @@
+-when holding down X, stay locked onto april tag while driving. 
+-start aiming at tag, then hold
+-deactivates when tag is no longer visible, driver takes back over

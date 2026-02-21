@@ -35,8 +35,9 @@ import frc.robot.subsystems.arm.ArmSIM;
 import frc.robot.subsystems.flywheel.Flywheel;
 // import frc.robot.subsystems.flywheel.Flywheel;
 import frc.robot.subsystems.flywheel.FlywheelSIM;
-import frc.robot.commands.DriveToTagCommand;
+import frc.robot.commands.DriveAndLockCommand;
 import frc.robot.commands.FaceTagCommand;
+import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.vision.LimelightSubsystem;
 
 /**
@@ -92,6 +93,10 @@ public class RobotContainer {
   // public final Flywheel flywheel = RobotBase.isSimulation() ? new FlywheelSIM() : new Flywheel();
   // private final Superstructure superstructure = new Superstructure(arm, flywheel);
 
+  // Intake motor for collecting and ejecting game pieces
+  // TODO: Update IntakeConstants.INTAKE_CAN_ID once the motor is wired and assigned
+  public final Intake intake = new Intake();
+
   // Vision camera for tracking robot position
   public final LimelightSubsystem limelight =
       new LimelightSubsystem("limelight", drivetrain);
@@ -131,8 +136,20 @@ public class RobotContainer {
                   .withRotationalRate(-rescaleRotation(joystick.getRightX()) * MaxAngularRate);
             }));
 
-    // Face nearest AprilTag while held (rotation only)
-    joystick.leftBumper().whileTrue(new FaceTagCommand(drivetrain, limelight));
+    // Intake: left trigger spins intake forward, left bumper ejects in reverse
+    joystick.leftTrigger().whileTrue(intake.intake());
+    joystick.leftBumper().whileTrue(intake.eject());
+
+    // Face hub AprilTag while held — right bumper searches CW
+    joystick.rightBumper().whileTrue(new FaceTagCommand(drivetrain, limelight, -1.0));
+
+    // Drive normally while keeping rotation locked on hub tag — ends when tag leaves view
+    joystick.x().whileTrue(new DriveAndLockCommand(
+        drivetrain,
+        limelight,
+        () -> -rescaleTranslation(joystick.getLeftY(), joystick.getLeftX()).get(0, 0) * MaxSpeed,
+        () -> -rescaleTranslation(joystick.getLeftY(), joystick.getLeftX()).get(1, 0) * MaxSpeed
+    ));
 
     joystick
         .start()
