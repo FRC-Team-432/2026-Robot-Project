@@ -9,6 +9,7 @@
 
 | Task | Session |
 |------|---------|
+| **Limelight debugging (confirm tags are being seen)** | **Session 1 (Sat) — first** |
 | Delete Arm, Flywheel, Superstructure + their constants | Session 1 (Sat) |
 | Create IntakeConstants, ShooterConstants, ClimberConstants | Session 1 (Sat) |
 | Create Intake subsystem (1 motor) | Session 1 (Sat) |
@@ -16,18 +17,35 @@
 | Create Climber subsystem (1 motor) | Session 1 (Sat) |
 | Update RobotContainer — operator controller + new bindings | Session 1 (Sat) |
 | Hardware install, deploy, first motor tests | Session 2 (Tue) |
-| Limelight debugging (confirm tags are being seen) | Session 2 (Tue) |
 | Tune shooter speed, intake speed, climber limits | Session 3 (Wed) |
 | Snap-to-tag confirm + auto routines | Session 3 (Wed) |
 | Full drive cycle, polish, stretch goals | Session 4 (Sat) |
 
 ---
 
-## Session 1 — Saturday (9–3): Code Sprint
+## Session 1 — Saturday (9–3): Vision First, Then Code Sprint
 
-**Goal:** Write all new subsystems, remove old ones, wire up controllers. No hardware needed yet.
+**Goal:** Verify the Limelight is working since it's already connected to the robot. Then write all new subsystems, remove old ones, and wire up controllers.
 
-### Step 1 — Delete old code that doesn't match this robot
+### Step 1 — Limelight / Vision System (do this first — robot is available)
+
+The Limelight is the only thing currently hooked up to the robot, so confirm it works before diving into code.
+
+1. Deploy current code to the robot: `./gradlew deploy`
+2. Open Shuffleboard — look for `Limelight/HasTarget`
+3. Point the camera at an AprilTag manually — does `HasTarget` go `true`?
+4. If yes: test driver **Left Bumper** → robot should rotate toward the tag
+5. If no target is detected, check:
+   - Camera power and cable connection
+   - Limelight web UI at `http://limelight.local:5801` (or `http://10.4.32.11:5801`)
+   - Pipeline is set to AprilTag mode (not retroreflective or neural)
+   - Tag is within camera field of view and lit well enough
+
+Once the Limelight is confirmed working (or diagnosed), move on to the code sprint below.
+
+---
+
+### Step 2 — Delete old code that doesn't match this robot
 
 Files to delete:
 - `src/main/java/frc/robot/subsystems/arm/Arm.java`
@@ -42,7 +60,7 @@ Also: clean up the commented-out Arm/Flywheel/Superstructure lines in `RobotCont
 
 ---
 
-### Step 2 — Confirm CAN IDs with electrical team
+### Step 3 — Confirm CAN IDs with electrical team
 
 > **Do this before writing constants.** Talk to whoever is wiring the robot.
 
@@ -60,7 +78,7 @@ If any motor ends up on the `"canivore"` bus, update the bus string in that subs
 
 ---
 
-### Step 3 — Create `IntakeConstants.java`
+### Step 4 — Create `IntakeConstants.java`
 
 **Path:** `src/main/java/frc/robot/constants/IntakeConstants.java`
 
@@ -79,7 +97,7 @@ public final class IntakeConstants {
 
 ---
 
-### Step 4 — Create `ShooterConstants.java`
+### Step 5 — Create `ShooterConstants.java`
 
 **Path:** `src/main/java/frc/robot/constants/ShooterConstants.java`
 
@@ -102,7 +120,7 @@ public final class ShooterConstants {
 
 ---
 
-### Step 5 — Create `ClimberConstants.java`
+### Step 6 — Create `ClimberConstants.java`
 
 **Path:** `src/main/java/frc/robot/constants/ClimberConstants.java`
 
@@ -120,7 +138,7 @@ public final class ClimberConstants {
 
 ---
 
-### Step 6 — Create `Intake.java`
+### Step 7 — Create `Intake.java`
 
 **Path:** `src/main/java/frc/robot/subsystems/intake/Intake.java`
 
@@ -136,7 +154,7 @@ Use `TalonFXUtil.applyConfigWithRetries()` for motor config. Add `@Logged` annot
 
 ---
 
-### Step 7 — Create `Shooter.java`
+### Step 8 — Create `Shooter.java`
 
 **Path:** `src/main/java/frc/robot/subsystems/shooter/Shooter.java`
 
@@ -168,7 +186,7 @@ Add `@Logged` annotation.
 
 ---
 
-### Step 8 — Create `Climber.java`
+### Step 9 — Create `Climber.java`
 
 **Path:** `src/main/java/frc/robot/subsystems/climber/Climber.java`
 
@@ -183,7 +201,7 @@ Soft limits configured in motor config to prevent over-travel. Add `@Logged` ann
 
 ---
 
-### Step 9 — Update `RobotContainer.java`
+### Step 10 — Update `RobotContainer.java`
 
 Changes needed:
 1. **Remove** all Arm/Flywheel/Superstructure imports and references
@@ -212,11 +230,7 @@ Right Trigger (operator) → shooter spins up, waits for speed, feeds ball while
 3. **Test intake:** Left trigger → motor spins. If backwards, add `.withInverted(true)` in `Intake.java`
 4. **Test shooter:** Right trigger → wheels spin up, then feeder runs. Adjust `SHOOTING_SPEED_RPS`
 5. **Test climber:** Assigned button → motor extends. Set soft limits after measuring travel distance
-6. **Limelight:**
-   - Open Shuffleboard, check `Limelight/HasTarget`
-   - Point camera at an AprilTag manually — does `HasTarget` go `true`?
-   - If yes: test driver Left Bumper → robot should rotate toward tag
-   - If still no: hardware issue (check camera power, IP `10.4.32.11:5801`, pipeline set to AprilTag)
+6. **Limelight snap-to-tag:** Confirm driver Left Bumper → robot rotates toward tag (vision confirmed in session 1)
 
 ---
 
