@@ -24,8 +24,8 @@ import frc.robot.utils.TalonFXUtil;
 @Logged
 public class Flywheel extends SubsystemBase {
 
-  // Main motor that spins the flywheel (device ID 21)
-  protected final TalonFX leader = new TalonFX(21, TunerConstants.kCANBus);
+  // Main motor that spins the flywheel (device ID 35)
+  protected final TalonFX leader = new TalonFX(35, TunerConstants.kCANBus);
 
   // Controller for spinning the flywheel at a target speed
   private final MotionMagicVelocityVoltage velocityOut = new MotionMagicVelocityVoltage(0);
