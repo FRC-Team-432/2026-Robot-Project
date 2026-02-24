@@ -18,7 +18,6 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
-import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -30,10 +29,9 @@ import frc.robot.constants.AutoConstants;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Superstructure;
-import frc.robot.subsystems.arm.Arm;
-import frc.robot.subsystems.arm.ArmSIM;
-import frc.robot.subsystems.flywheel.Flywheel;
-import frc.robot.subsystems.flywheel.FlywheelSIM;
+import frc.robot.subsystems.climb.Climb;
+import frc.robot.subsystems.shooter.Feeder;
+import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.vision.LimelightSubsystem;
 
 /**
@@ -41,34 +39,23 @@ import frc.robot.subsystems.vision.LimelightSubsystem;
  *
  * <p>This class handles:
  * <ul>
- *   <li>Creating all subsystems (drive, arm, flywheel, vision, etc.)
+ *   <li>Creating all subsystems (drive, climb, shooter, feeder, vision, etc.)
  *   <li>Setting up controller buttons
  *   <li>Building autonomous routines
  *   <li>Setting default actions for each subsystem
  * </ul>
- *
- * <p>The robot can run in two modes:
- * <ul>
- *   <li><b>Real hardware:</b> Uses actual motors and sensors
- *   <li><b>Simulation:</b> Uses simulated physics for testing without a real robot
- * </ul>
- * The code automatically picks the right version.
  */
 @Logged
 public class RobotContainer {
-  private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired
-  // top
-  // speed
+  private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
   private double MaxAngularRate =
-      RotationsPerSecond.of(1)
-          .in(RadiansPerSecond); // 1 of a rotation per second max angular velocity
+      RotationsPerSecond.of(1).in(RadiansPerSecond);
 
   /* Configure field-centric driving (forward is always away from driver) */
   private final SwerveRequest.FieldCentric drive =
       new SwerveRequest.FieldCentric()
           .withDriveRequestType(DriveRequestType.Velocity)
-          .withSteerRequestType(
-              SteerRequestType.MotionMagicExpo); // Smooth steering with MotionMagic
+          .withSteerRequestType(SteerRequestType.MotionMagicExpo);
 
   private final CommandXboxController joystick = new CommandXboxController(0);
 
@@ -84,27 +71,24 @@ public class RobotContainer {
               Pounds.of(AutoConstants.ROBOT_MASS_LBS),
               KilogramSquareMeters.of(AutoConstants.MOMENT_OF_INERTIA_KG_M2))));
 
-  /* Create subsystems (uses simulated versions when running in simulation) */
-  public final Arm arm = RobotBase.isSimulation() ? new ArmSIM() : new Arm();
-  public final Flywheel flywheel = RobotBase.isSimulation() ? new FlywheelSIM() : new Flywheel();
-  private final Superstructure superstructure = new Superstructure(arm, flywheel);
+  /* Subsystems */
+  public final Climb climb = new Climb();
+  public final Shooter shooter = new Shooter();
+  public final Feeder feeder = new Feeder();
 
-  // Vision camera for tracking robot position
-  public final LimelightSubsystem limelight =
-      new LimelightSubsystem("limelight", drivetrain);
+  private final Superstructure superstructure = new Superstructure(shooter, feeder);
+
+  // Vision camera for tracking robot position and measuring distance to AprilTags
+  public final LimelightSubsystem limelight = new LimelightSubsystem("limelight", drivetrain);
 
   /* Autonomous mode selector */
   private final SendableChooser<Command> autoChooser;
-
   private final AutoRoutines autoRoutines;
 
   public RobotContainer() {
-
-    // Set up autonomous routines
     autoChooser = new SendableChooser<>();
     autoRoutines = new AutoRoutines(autoCommands, superstructure);
 
-    // Add autonomous mode options to dashboard
     autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
 
     SmartDashboard.putData("Auto Mode", autoChooser);
@@ -113,10 +97,8 @@ public class RobotContainer {
   }
 
   private void configureBindings() {
-    // Controller axes: X = forward/backward, Y = left/right
-    // (This is WPILib's standard coordinate system)
+    // ==================== Drive ====================
     drivetrain.setDefaultCommand(
-        // Robot drives using joystick inputs by default
         drivetrain.applyRequest(
             () -> {
               Vector<N2> scaledInputs = rescaleTranslation(joystick.getLeftY(), joystick.getLeftX());
@@ -126,15 +108,35 @@ public class RobotContainer {
                   .withRotationalRate(-rescaleRotation(joystick.getRightX()) * MaxAngularRate);
             }));
 
+    // Reset field-centric heading
     joystick
         .start()
         .onTrue(
             drivetrain.runOnce(
                 () -> drivetrain.resetPose(new Pose2d(Feet.of(0), Feet.of(0), Rotation2d.kZero))));
+
+    // ==================== Climb ====================
+
+    // Y — hold to climb up. Motor brakes and holds position on release.
+    joystick.y().whileTrue(climb.climbUpCommand());
+
+    // A — hold to climb down. Motor brakes and holds position on release.
+    joystick.a().whileTrue(climb.climbDownCommand());
+
+    // ==================== Shooter ====================
+
+    // Right trigger — hold to shoot.
+    // Both shooter wheels and feeder run simultaneously.
+    // Everything stops the moment the trigger is released.
+    joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootCommand());
+
+    // --- Distance-based shooting (bonus) ---
+    // Uncomment the line below (and comment out the line above) to enable automatic
+    // speed adjustment based on AprilTag distance from the Limelight.
+    // joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootWithDistanceCommand(limelight::getAvgTagDistance));
   }
 
   public Command getAutonomousCommand() {
-    /* Return whichever autonomous mode was selected on the dashboard */
     return autoChooser.getSelected();
   }
 
