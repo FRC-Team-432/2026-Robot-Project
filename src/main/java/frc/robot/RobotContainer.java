@@ -146,7 +146,8 @@ public class RobotContainer {
     return MathUtil.copyDirectionPow(scaledJoyStick, 2);
   }
 
-  public double rescaleRotation(double rotation){
-    return Math.copySign(MathUtil.applyDeadband(rotation, 1), 2);
-  }
+  public double rescaleRotation(double rotation) {
+    double deadbanded = MathUtil.applyDeadband(rotation, 0.1);
+    return Math.copySign(deadbanded * deadbanded, deadbanded);
+}
 }

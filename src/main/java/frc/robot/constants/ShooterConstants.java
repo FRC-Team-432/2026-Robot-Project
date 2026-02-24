@@ -24,13 +24,13 @@ public final class ShooterConstants {
   // These motors are on the RoboRIO CAN bus (not CANivore).
 
   /** CAN ID for the first shooter motor (leader) */
-  public static final int SHOOTER_LEADER_ID = 20;
+  public static final int SHOOTER_LEADER_ID = 5;
 
   /** CAN ID for the second shooter motor (follower, runs opposite direction to grip ball) */
-  public static final int SHOOTER_FOLLOWER_ID = 21;
+  public static final int SHOOTER_FOLLOWER_ID = 6;
 
   /** CAN ID for the feeder motor (feeds balls up to the shooter at slower speed) */
-  public static final int FEEDER_ID = 22;
+  public static final int FEEDER_ID = 40;
 
   // ==================== Shooter Speed ====================
 
@@ -38,7 +38,7 @@ public final class ShooterConstants {
    * Fixed shooting speed in rotations per second.
    * TODO: Tune this on the real robot — start low and increase until balls reach target.
    */
-  public static final double SHOOTER_SPEED_RPS = 25.0;
+  public static final double SHOOTER_SPEED_RPS = 1700.0;
 
   // ==================== Feeder Speed ====================
 
@@ -46,7 +46,7 @@ public final class ShooterConstants {
    * Feeder motor duty cycle (0.0 = stopped, 1.0 = full speed).
    * TODO: Tune this on the real robot — feeder should move slower than shooter.
    */
-  public static final double FEEDER_SPEED_PERCENT = 0.5;
+  public static final double FEEDER_SPEED_PERCENT = 0.2;
 
   // ==================== Distance-Based Shooting (Bonus) ====================
   // Maps distance from target (meters) to required shooter speed (RPS).
