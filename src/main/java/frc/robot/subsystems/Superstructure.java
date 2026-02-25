@@ -4,164 +4,152 @@ import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.subsystems.arm.Arm;
-import frc.robot.subsystems.flywheel.Flywheel;
+import frc.robot.constants.ShooterConstants;
+import frc.robot.subsystems.shooter.Feeder;
+import frc.robot.subsystems.shooter.Shooter;
+import java.util.function.DoubleSupplier;
 
 /**
- * Superstructure - Controls the Arm and Flywheel together.
+ * Superstructure — coordinates the Shooter and Feeder together.
  *
- * <p>This coordinates:
+ * <p>Climb is controlled directly from RobotContainer (Y/A buttons)
+ * and does not need to be coordinated with the shooter.
  *
- * <ul>
- *   <li>Arm - Moves horizontal and vertical to position game pieces
- *   <li>Flywheel - Spins the shooter wheels at the right speed
- * </ul>
+ * <p><b>Teleop shooting</b> (right trigger):
+ * Use {@link #teleOpShootCommand()} to run all three motors at once while
+ * the trigger is held. For distance-based speed, use
+ * {@link #teleOpShootWithDistanceCommand(DoubleSupplier)} instead.
  *
- * <p>Instead of controlling the arm and flywheel separately, this gives you simple
- * commands like "score low" or "prepare for shooting" that move both parts together.
- * This makes driving easier and ensures everything moves in sync.
+ * <p><b>Auto shooting</b>: use the prepare → shoot → stow sequence:
+ * <pre>
+ *   superstructure.speakerCloseAndWaitCommand()  // shooter spins up, wait until ready
+ *   superstructure.shootCommand()                // feeder fires ball through
+ *   superstructure.stowCommand()                 // stop shooter
+ * </pre>
  */
 @Logged
 public class Superstructure extends SubsystemBase {
 
-  // ==================== Subsystems ====================
-  private final Arm arm;
-  private final Flywheel flywheel;
+  private final Shooter shooter;
+  private final Feeder feeder;
 
-  // ==================== Constructor ====================
-
-  public Superstructure(Arm arm, Flywheel flywheel) {
-    this.arm = arm;
-    this.flywheel = flywheel;
+  public Superstructure(Shooter shooter, Feeder feeder) {
+    this.shooter = shooter;
+    this.feeder = feeder;
   }
 
-  // ==================== Coordinated Commands ====================
+  // ==================== Teleop Shooting Commands ====================
 
   /**
-   * Command to safely stow the robot for transport.
-   * Moves arm to vertical position and stops the flywheel.
+   * Run all three motors simultaneously while the command is active.
+   *
+   * <p>Bind to the right trigger with {@code .whileTrue()} so the motors
+   * run while the trigger is held and stop the moment it is released.
+   *
+   * @return Command that runs shooter + feeder while active, stops on release
    */
+  public Command teleOpShootCommand() {
+    return Commands.parallel(
+            shooter.spinWhileHeld(),
+            feeder.feedWhileHeld())
+        .withName("TeleOpShoot");
+  }
+
+  /**
+   * Same as {@link #teleOpShootCommand()} but shooter speed adjusts based on
+   * distance to target — closer = slower, farther = faster.
+   *
+   * @param distanceMeters Supplier for current distance to target (meters)
+   * @return Command that runs distance-adjusted shooter + feeder while active
+   */
+  public Command teleOpShootWithDistanceCommand(DoubleSupplier distanceMeters) {
+    return Commands.parallel(
+            shooter.spinAtDistanceWhileHeld(distanceMeters),
+            feeder.feedWhileHeld())
+        .withName("TeleOpShootWithDistance");
+  }
+
+  // ==================== State Commands ====================
+  // These maintain the same method names used by AutoRoutines.java.
+  // Without an arm, position-based commands simply manage the shooter state.
+
+  /** Stop the shooter (safe state for transport). */
   public Command stowCommand() {
-    return Commands.parallel(
-            arm.vertical(),
-            flywheel.stopCommand())
-        .withName("Stow");
+    return shooter.stopCommand().withName("Stow");
   }
 
-  /**
-   * Command to stow and wait until both mechanisms reach target.
-   * Waits for arm to reach vertical and flywheel to stop completely.
-   */
+  /** Stop the shooter and wait until it has fully stopped. */
   public Command stowAndWaitCommand() {
-    return Commands.parallel(
-            arm.vertical(),
-            flywheel.stopCommand())
-        .andThen(Commands.waitUntil(() -> arm.isAtTarget() && flywheel.isAtTarget()))
+    return shooter.stopCommand()
+        .andThen(Commands.waitUntil(() -> !shooter.isAtTarget()))
         .withName("StowAndWait");
   }
 
-  /**
-   * Command to score in the amp (controlled slow spin).
-   * Moves arm to vertical and spins flywheel slowly for controlled scoring.
-   */
+  /** Stop the shooter (no arm to position for amp). */
   public Command ampScoreCommand() {
-    return Commands.parallel(
-            arm.vertical(),
-            flywheel.ampSpeed())
-        .withName("AmpScore");
+    return shooter.stopCommand().withName("AmpScore");
   }
 
-  /**
-   * Command to score in amp and wait until ready.
-   * Waits for arm to reach vertical and flywheel to reach amp speed.
-   */
+  /** Stop the shooter (no arm to position for amp). */
   public Command ampScoreAndWaitCommand() {
-    return Commands.parallel(
-            arm.vertical(),
-            flywheel.ampSpeed())
-        .andThen(Commands.waitUntil(() -> arm.isAtTarget() && flywheel.isAtTarget()))
-        .withName("AmpScoreAndWait");
+    return shooter.stopCommand().withName("AmpScoreAndWait");
   }
 
   /**
-   * Command to prepare for close speaker shot.
-   * Moves arm to scoring angle (30°) and spins flywheel at medium speed (25 RPS).
+   * Spin up the shooter for a close speaker shot.
+   * The TalonFX holds speed after this command ends.
    */
   public Command speakerCloseCommand() {
-    return Commands.parallel(
-            arm.scoringPosition(),
-            flywheel.spinUp())
-        .withName("SpeakerClose");
+    return shooter.spinUpOnce().withName("SpeakerClose");
   }
 
   /**
-   * Command to prepare for close speaker shot and wait until ready.
-   * Waits for arm to reach scoring position and flywheel to reach speed.
+   * Spin up the shooter and wait until it has reached target speed.
    */
   public Command speakerCloseAndWaitCommand() {
-    return Commands.parallel(
-            arm.scoringPosition(),
-            flywheel.spinUp())
-        .andThen(Commands.waitUntil(() -> arm.isAtTarget() && flywheel.isAtTarget()))
+    return shooter.spinUpOnce()
+        .andThen(Commands.waitUntil(() -> shooter.isAtTarget()))
         .withName("SpeakerCloseAndWait");
   }
 
   /**
-   * Command to prepare for far speaker shot.
-   * Moves arm to high angle (45°) and spins flywheel fast (35 RPS).
+   * Spin up the shooter for a far speaker shot.
+   * The TalonFX holds speed after this command ends.
    */
   public Command speakerFarCommand() {
-    return Commands.parallel(
-            arm.scoringHighPosition(),
-            flywheel.farSpeed())
-        .withName("SpeakerFar");
+    return shooter.spinUpOnce().withName("SpeakerFar");
   }
 
   /**
-   * Command to prepare for far speaker shot and wait until ready.
-   * Waits for arm to reach high position and flywheel to reach fast speed.
+   * Spin up the shooter and wait until it has reached target speed.
    */
   public Command speakerFarAndWaitCommand() {
-    return Commands.parallel(
-            arm.scoringHighPosition(),
-            flywheel.farSpeed())
-        .andThen(Commands.waitUntil(() -> arm.isAtTarget() && flywheel.isAtTarget()))
+    return shooter.spinUpOnce()
+        .andThen(Commands.waitUntil(() -> shooter.isAtTarget()))
         .withName("SpeakerFarAndWait");
   }
 
-  /**
-   * Command to prepare for ground intake.
-   * Moves arm to horizontal position and stops flywheel.
-   */
+  /** Stop the shooter (no arm to move for ground intake). */
   public Command intakeGroundCommand() {
-    return Commands.parallel(
-            arm.horizontal(),
-            flywheel.stopCommand())
-        .withName("IntakeGround");
+    return shooter.stopCommand().withName("IntakeGround");
   }
 
-  /**
-   * Command to prepare for ground intake and wait until ready.
-   * Waits for arm to reach horizontal and flywheel to stop.
-   */
+  /** Stop the shooter (no arm to move for ground intake). */
   public Command intakeGroundAndWaitCommand() {
-    return Commands.parallel(
-            arm.horizontal(),
-            flywheel.stopCommand())
-        .andThen(Commands.waitUntil(() -> arm.isAtTarget() && flywheel.isAtTarget()))
-        .withName("IntakeGroundAndWait");
+    return shooter.stopCommand().withName("IntakeGroundAndWait");
   }
 
-  // ==================== Action Commands ====================
+  // ==================== Auto Fire Command ====================
 
   /**
-   * Command to shoot a game piece.
-   * Waits briefly for the game piece to be expelled from the robot.
+   * Fire a game piece in autonomous.
    *
-   * <p>This represents the time needed for the spinning flywheel to launch the game piece.
-   * Use this after preparing the shooter with speaker commands.
+   * <p>Runs the feeder to push the ball into the already-spinning shooter wheels.
+   * Use this after {@code speakerCloseAndWaitCommand()} so the shooter is at speed.
+   *
+   * @return Command that feeds a ball through the shooter
    */
   public Command shootCommand() {
-    return Commands.waitSeconds(0.3).withName("Shoot");
+    return feeder.feedForTime(ShooterConstants.SHOOT_DURATION_SECONDS).withName("Shoot");
   }
 }
