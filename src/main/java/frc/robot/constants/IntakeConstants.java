@@ -11,7 +11,7 @@ public final class IntakeConstants {
   public static final int INTAKE_CAN_ID = 12;
 
   /** Duty cycle output (0.0–1.0) for intaking (left trigger held). */
-  public static final double INTAKE_SPEED = 0.4;
+  public static final double INTAKE_SPEED = 1;
 
   /** Duty cycle output (0.0–1.0) for ejecting (left bumper held). Applied as negative. */
   public static final double EJECT_SPEED = 0.5;

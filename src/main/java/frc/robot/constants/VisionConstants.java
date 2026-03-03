@@ -51,6 +51,16 @@ public final class VisionConstants {
   /** AprilTag IDs on the red alliance hub (left, center) */
   public static final int[] RED_HUB_TAG_IDS = {9, 10};
 
+  // ==================== Climb AprilTag IDs ====================
+  // TODO: Verify these IDs against the 2026 game manual before competition.
+  // These are the tags mounted on the climb structure — used by the back camera only.
+
+  /** AprilTag IDs on the blue alliance climb structure */
+  public static final int[] BLUE_CLIMB_TAG_IDS = {14, 15};
+
+  /** AprilTag IDs on the red alliance climb structure */
+  public static final int[] RED_CLIMB_TAG_IDS = {4, 5};
+
   // ==================== Drive-to-Tag Constants ====================
 
   /** Target stopping distance from the AprilTag (meters) */

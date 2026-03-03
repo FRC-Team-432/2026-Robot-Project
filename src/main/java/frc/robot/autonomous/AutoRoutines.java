@@ -1,40 +1,118 @@
 package frc.robot.autonomous;
 
+import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
+import com.ctre.phoenix6.swerve.SwerveModule.SteerRequestType;
+import com.ctre.phoenix6.swerve.SwerveRequest;
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import frc.robot.commands.FaceTagCommand;
+import frc.robot.constants.VisionConstants;
 import frc.robot.constants.Waypoints;
+import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Superstructure;
+import frc.robot.subsystems.vision.LimelightSubsystem;
+import java.util.Set;
+
 
 public class AutoRoutines {
 
   private final AutoCommands autoCommands;
-   private final Superstructure superstructure;
+  private final Superstructure superstructure;
+  private final CommandSwerveDrivetrain drivetrain;
+  private final LimelightSubsystem limelight;
 
-  public AutoRoutines(AutoCommands autoCommands, Superstructure superstructure) {
+  // Backward drive request (robot-relative, -X = backward)
+  // If the robot needs to move forward instead, change -0.5 to +0.5
+  private final SwerveRequest.RobotCentric driveBackward =
+      new SwerveRequest.RobotCentric()
+          .withDriveRequestType(DriveRequestType.Velocity)
+          .withSteerRequestType(SteerRequestType.MotionMagicExpo)
+          .withVelocityX(-0.5);
+
+  public AutoRoutines(
+      AutoCommands autoCommands,
+      Superstructure superstructure,
+      CommandSwerveDrivetrain drivetrain,
+      LimelightSubsystem limelight) {
     this.autoCommands = autoCommands;
     this.superstructure = superstructure;
+    this.drivetrain = drivetrain;
+    this.limelight = limelight;
   }
 
-  /**
-   * Example autonomous using WAITING commands for sequential operations.
-   *
-   * <p>Demonstrates using AndWait variants to ensure mechanisms are ready before continuing.
-   * Good for when you need precise timing and guaranteed completion.
-   */
+  // ============================================================
+  // VISION AUTO  —  shared logic for all starting positions
+  //
+  //   1. Reset pose to starting position
+  //   2. Drive backward until the hub AprilTag is visible (max 4 sec)
+  //   3. Lock rotation onto the hub tag + spin up shooter simultaneously
+  //   4. Shoot
+  //   5. Stow
+  // ============================================================
+  private Command visionDriveAndShoot(Pose2d startPose) {
+    return Commands.defer(() -> {
+      boolean isBlue = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue;
+      int[] hubTags = isBlue ? VisionConstants.BLUE_HUB_TAG_IDS : VisionConstants.RED_HUB_TAG_IDS;
+
+      return Commands.sequence(
+          autoCommands.resetPose(startPose),
+
+          // Drive backward until a hub tag appears, then stop (4-second timeout)
+          Commands.race(
+              drivetrain.applyRequest(() -> driveBackward),
+              Commands.waitUntil(() -> limelight.getTXForTags(hubTags).isPresent())
+          ).withTimeout(4.0),
+
+          // Lock rotation onto the hub tag and spin up shooter at the same time
+          Commands.parallel(
+              new FaceTagCommand(drivetrain, limelight, -1.0).withTimeout(2.0),
+              superstructure.speakerCloseAndWaitCommand().withTimeout(3.0)
+          ),
+
+          // Fire and stow
+          superstructure.shootCommand(),
+          superstructure.stowCommand()
+      );
+    }, Set.of(drivetrain));
+  }
+
+  // ============================================================
+  // LEFT START  —  robot begins at the left side of the alliance wall
+  //   Starting pose: START_LEFT  (x=7.15, y=6.05, heading=-120°)
+  // ============================================================
+  public Command leftStartAuto() {
+    return visionDriveAndShoot(Waypoints.START_LEFT);
+  }
+
+  // ============================================================
+  // CENTER START  —  robot begins in the center of the alliance wall
+  //   Starting pose: START_CENTER  (x=7.15, y=4.05, heading=0°)
+  // ============================================================
+  public Command centerStartAuto() {
+    return visionDriveAndShoot(Waypoints.START_CENTER);
+  }
+
+  // ============================================================
+  // RIGHT START  —  robot begins at the right side of the alliance wall
+  //   Starting pose: START_RIGHT  (x=7.15, y=2.05, heading=120°)
+  // ============================================================
+  public Command rightStartAuto() {
+    return visionDriveAndShoot(Waypoints.START_RIGHT);
+  }
+
+  /*
   public Command sequentialScoringAuto() {
     return Commands.sequence(
         Commands.print("=== Sequential Scoring Auto ==="),
         autoCommands.resetPose(Pose2d.kZero),
-        // Wait for speaker shot to be ready, then shoot
         superstructure.speakerCloseAndWaitCommand(),
         superstructure.shootCommand(),
-        // Drive to game piece while preparing intake
         autoCommands.driveTo(new Pose2d(3.0, 0, Rotation2d.kZero)),
         superstructure.intakeGroundAndWaitCommand(),
-        Commands.waitSeconds(0.5), // Time to intake game piece
-        // Drive back and prepare for far shot
+        Commands.waitSeconds(0.5),
         autoCommands.driveTo(new Pose2d(4.0, 2.0, Rotation2d.kZero)),
         superstructure.speakerFarAndWaitCommand(),
         superstructure.shootCommand(),
@@ -42,65 +120,42 @@ public class AutoRoutines {
         Commands.print("=== Complete ==="));
   }
 
-  /**
-   * Example autonomous using INSTANT commands for parallel preparation.
-   *
-   * <p>Demonstrates starting mechanism movements while driving to save time.
-   * Good for when you want responsive, overlapping actions.
-   */
   public Command parallelPreparationAuto() {
     return Commands.sequence(
         Commands.print("=== Parallel Preparation Auto ==="),
         autoCommands.resetPose(Pose2d.kZero),
-        // Start preparing speaker shot immediately (instant command)
         superstructure.speakerCloseCommand(),
-        Commands.waitSeconds(1.0), // Give time for mechanisms to get ready
+        Commands.waitSeconds(1.0),
         superstructure.shootCommand(),
-        // Drive to game piece and start preparing intake partway through
         Commands.parallel(
             autoCommands.driveTo(new Pose2d(3.0, 0, Rotation2d.kZero)),
             Commands.sequence(
-                Commands.waitSeconds(0.5), // Wait partway through drive
-                superstructure.intakeGroundCommand() // Start moving intake early
-                )),
-        Commands.waitSeconds(0.5), // Complete intake
-        // Start preparing amp score while driving
+                Commands.waitSeconds(0.5),
+                superstructure.intakeGroundCommand())),
+        Commands.waitSeconds(0.5),
         Commands.parallel(
             autoCommands.driveTo(new Pose2d(1.0, 4.0, Rotation2d.kZero)),
             Commands.sequence(
                 Commands.waitSeconds(0.5),
-                superstructure.ampScoreCommand() // Prepare during drive
-                )),
+                superstructure.ampScoreCommand())),
         superstructure.shootCommand(),
         superstructure.stowCommand(),
         Commands.print("=== Complete ==="));
   }
 
-  /**
-   * Simple mobility autonomous - just leave the starting zone.
-   *
-   * <p>Demonstrates basic driving and stowing for safe transport.
-   */
   public Command mobilityAuto() {
     return Commands.sequence(
         Commands.print("=== Mobility Auto ==="),
-        superstructure.stowCommand(), // Ensure robot is in safe position
+        superstructure.stowCommand(),
         autoCommands.driveTo(Waypoints.MIDFIELD_CENTER),
         Commands.print("=== Complete ==="));
   }
 
-  /**
-   * Drive back and forth autonomous - continuously drives between two positions.
-   *
-   * <p>Demonstrates using .repeatedly() to repeat a sequence indefinitely.
-   * Good for testing drivetrain reliability and path following.
-   */
   public Command driveBackAndForthAuto() {
     return Commands.sequence(
         Commands.print("=== Drive Back and Forth Auto ==="),
         autoCommands.resetPose(Pose2d.kZero),
-        superstructure.stowCommand(), // Ensure robot is in safe position
-        // Drive back and forth repeatedly until autonomous ends
+        superstructure.stowCommand(),
         Commands.sequence(
                 Commands.print("Driving forward..."),
                 autoCommands.driveTo(Waypoints.MIDFIELD_CENTER),
@@ -109,38 +164,28 @@ public class AutoRoutines {
             .repeatedly());
   }
 
-  /**
-   * Example showing all 5 command types in sequence.
-   *
-   * <p>Educational example demonstrating each command's purpose.
-   */
   public Command demonstrationAuto() {
     return Commands.sequence(
         Commands.print("=== Demonstration Auto ==="),
         autoCommands.resetPose(Pose2d.kZero),
-        // 1. Stow - safe transport
         Commands.print("1. Stowing for transport"),
         superstructure.stowAndWaitCommand(),
         Commands.waitSeconds(0.5),
-        // 2. Amp score - slow controlled scoring
         Commands.print("2. Amp scoring (slow speed)"),
         superstructure.ampScoreAndWaitCommand(),
         Commands.waitSeconds(0.5),
-        // 3. Speaker close - medium speed shot
         Commands.print("3. Close speaker shot (medium speed)"),
         superstructure.speakerCloseAndWaitCommand(),
         Commands.waitSeconds(0.5),
-        // 4. Speaker far - fast long-range shot
         Commands.print("4. Far speaker shot (fast speed)"),
         superstructure.speakerFarAndWaitCommand(),
         Commands.waitSeconds(0.5),
-        // 5. Ground intake - horizontal position
         Commands.print("5. Ground intake position"),
         superstructure.intakeGroundAndWaitCommand(),
         Commands.waitSeconds(0.5),
-        // Return to stow
         Commands.print("Returning to stow"),
         superstructure.stowAndWaitCommand(),
         Commands.print("=== Complete ==="));
   }
+  */
 }
