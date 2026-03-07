@@ -48,6 +48,16 @@ public class LimelightSubsystem extends SubsystemBase {
   private double avgTagDistance = 0.0; // Average distance to visible tags (meters)
   private double ambiguity = 0.0; // Ambiguity value across all visible tags
 
+  // Raw fiducials from the last successful pose estimate — used by hasSpecificTag().
+  // Populated from poseEstimate.rawFiducials (botpose_wpiblue array), which is reliable
+  // regardless of whether the standalone rawfiducials NT key is published.
+  private LimelightHelpers.RawFiducial[] poseRawFiducials = new LimelightHelpers.RawFiducial[0];
+
+  // Raw fiducials from the rawfiducials NT key, cached once per loop in fetchInputs().
+  // Caching avoids a race where the limelight (90 Hz) updates the NT entry between the
+  // logAprilTagData() read and the hasSpecificTag() read within the same 20 ms robot loop.
+  private LimelightHelpers.RawFiducial[] rawFiducialsCache = new LimelightHelpers.RawFiducial[0];
+
   // Throttle logging to ~1Hz (every 50 cycles at 20ms periodic)
   private int logCounter = 0;
   private static final int LOG_INTERVAL = 50;
@@ -103,6 +113,10 @@ public class LimelightSubsystem extends SubsystemBase {
   }
 
   private void fetchInputs() {
+    // Cache rawfiducials ONCE at the top of each loop — prevents a race condition where
+    // the limelight updates the NT entry between logAprilTagData() and hasSpecificTag().
+    rawFiducialsCache = LimelightHelpers.getRawFiducials(limelightName);
+
     // Get robot position estimate from Limelight (using blue alliance coordinates)
     LimelightHelpers.PoseEstimate poseEstimate =
         LimelightHelpers.getBotPoseEstimate_wpiBlue(limelightName);
@@ -113,12 +127,14 @@ public class LimelightSubsystem extends SubsystemBase {
       tagCount = poseEstimate.tagCount;
       avgTagDistance = poseEstimate.avgTagDist;
       ambiguity = poseEstimate.rawFiducials[0].ambiguity;
+      poseRawFiducials = poseEstimate.rawFiducials;
     } else {
       robotPose = new Pose2d();
       robotPoseTimestamp = 0.0;
       tagCount = 0;
       avgTagDistance = 0.0;
       ambiguity = 0.0;
+      poseRawFiducials = new LimelightHelpers.RawFiducial[0];
     }
   }
 
@@ -176,6 +192,26 @@ public class LimelightSubsystem extends SubsystemBase {
     boolean shouldLog = (logCounter++ % LOG_INTERVAL == 0);
 
     SmartDashboard.putBoolean("Limelight/HasTarget", hasTarget);
+    SmartDashboard.putNumber("Limelight/TargetID", LimelightHelpers.getFiducialID(limelightName));
+    SmartDashboard.putNumber("Limelight/PoseTagCount", tagCount);
+
+    // Climb tag diagnostics — updated every loop so SmartDashboard shows real-time state.
+    // Check each source individually so we can see WHICH source is (or isn't) firing.
+    boolean src1Blue = false;
+    for (LimelightHelpers.RawFiducial f : poseRawFiducials) {
+      if (f.id == 31 || f.id == 32) { src1Blue = true; break; }
+    }
+    int tid = (int) LimelightHelpers.getFiducialID(limelightName);
+    boolean src2Blue = (tid == 31 || tid == 32);
+    boolean src3Blue = false;
+    for (LimelightHelpers.RawFiducial f : rawFiducialsCache) {
+      if (f.id == 31 || f.id == 32) { src3Blue = true; break; }
+    }
+    SmartDashboard.putBoolean("Limelight/ClimbTag/Src1_Pose", src1Blue);
+    SmartDashboard.putBoolean("Limelight/ClimbTag/Src2_TID", src2Blue);
+    SmartDashboard.putBoolean("Limelight/ClimbTag/Src3_Raw", src3Blue);
+    SmartDashboard.putBoolean("Limelight/ClimbTag/AnyTrue", src1Blue || src2Blue || src3Blue);
+    SmartDashboard.putNumber("Limelight/RawCacheSize", rawFiducialsCache.length);
 
     if (!hasTarget) {
       SmartDashboard.putNumber("Limelight/TagCount", 0);
@@ -196,8 +232,7 @@ public class LimelightSubsystem extends SubsystemBase {
     SmartDashboard.putNumber("Limelight/AvgTagDistance", avgTagDistance);
     SmartDashboard.putNumber("Limelight/Ambiguity", ambiguity);
 
-    LimelightHelpers.RawFiducial[] fiducials =
-        LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
 
     // Always log when a target is visible (useful data, not spammy)
     DataLogManager.log(String.format(
@@ -237,6 +272,51 @@ public class LimelightSubsystem extends SubsystemBase {
   /** Returns the vertical offset (TY) to the primary target in degrees. */
   public double getTargetTY() {
     return LimelightHelpers.getTY(limelightName);
+  }
+
+  /**
+   * Returns the fiducial ID of the primary tracked target.
+   * Returns 0 if no target is visible (0 is never a valid AprilTag ID).
+   * Does NOT gate on hasTarget() to avoid a race between the tv and tid NT keys.
+   */
+  public int getTargetId() {
+    return (int) LimelightHelpers.getFiducialID(limelightName);
+  }
+
+  /**
+   * Returns true if the camera sees a target whose fiducial ID is in {@code ids}.
+   *
+   * <p>Checks three sources in order of reliability:
+   * <ol>
+   *   <li>Fiducials cached from {@code botpose_wpiblue} — same source as pose estimation,
+   *       always populated when any AprilTag is visible for pose.
+   *   <li>{@code tid} NT key — the primary tracked target's ID.
+   *   <li>{@code rawfiducials} NT key — all visible fiducials (requires Limelight config).
+   * </ol>
+   */
+  public boolean hasSpecificTag(int[] ids) {
+    // Source 1: fiducials from the last pose estimate (most reliable — same as pose estimation)
+    for (LimelightHelpers.RawFiducial f : poseRawFiducials) {
+      for (int id : ids) {
+        if (f.id == id) return true;
+      }
+    }
+    // Source 2: primary target ID via tid key (0 = no target, never a valid AprilTag ID)
+    int primaryId = getTargetId();
+    if (primaryId != 0) {
+      for (int id : ids) {
+        if (primaryId == id) return true;
+      }
+    }
+    // Source 3: rawFiducialsCache — snapshot from getRawFiducials() taken at loop start.
+    // Using the cache guarantees this sees the same data as logAprilTagData() in the
+    // same periodic cycle, preventing a false miss due to NT update timing.
+    for (LimelightHelpers.RawFiducial f : rawFiducialsCache) {
+      for (int id : ids) {
+        if (f.id == id) return true;
+      }
+    }
+    return false;
   }
 
   /**

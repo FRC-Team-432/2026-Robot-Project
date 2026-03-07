@@ -91,12 +91,8 @@ public class RobotContainer {
 
   private final Superstructure superstructure = new Superstructure(shooter, feeder);
 
-  // Front camera — AprilTag odometry + hub tracking + distance-based shooting
+  // Front camera — AprilTag odometry, hub tracking, and climb tag detection
   public final LimelightSubsystem limelight = new LimelightSubsystem("limelight", drivetrain);
-
-  // Back camera — climb alignment only; reads BLUE_CLIMB_TAG_IDS or RED_CLIMB_TAG_IDS
-  // Hostname must match the name set in this camera's Limelight web UI.
-  public final LimelightSubsystem limelightBack = new LimelightSubsystem("limelight-back", drivetrain);
 
   /* Autonomous mode selector */
   private final SendableChooser<Command> autoChooser;
@@ -142,7 +138,7 @@ public class RobotContainer {
         climb.climbDownCommand().withTimeout(1.5));
 
     autoChooser = new SendableChooser<>();
-    autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight);
+    autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight, climb);
 
     // ---- Vision Autos (primary) ----
     // Alliance is read at enable time — robot backs up until it sees the hub AprilTag,

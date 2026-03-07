@@ -30,7 +30,7 @@ public final class ShooterConstants {
   public static final int SHOOTER_FOLLOWER_ID = 6;
 
   /** CAN ID for the feeder motor (feeds balls up to the shooter at slower speed) */
-  public static final int FEEDER_ID = 40;
+  public static final int FEEDER_ID = 7;
 
   // ==================== Shooter Speed ====================
 
@@ -38,7 +38,7 @@ public final class ShooterConstants {
    * Fixed shooting speed in rotations per second.
    * TODO: Tune this on the real robot — start low and increase until balls reach target.
    */
-  public static final double SHOOTER_SPEED_RPS = 1700.0;
+  public static final double SHOOTER_SPEED_RPS = 200.0;
 
   // ==================== Feeder Speed ====================
 
