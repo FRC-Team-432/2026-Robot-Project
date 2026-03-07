@@ -12,6 +12,7 @@ import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -58,14 +59,14 @@ public class Shooter extends SubsystemBase {
   private final AngularVelocity tolerance =
       RotationsPerSecond.of(ShooterConstants.VELOCITY_TOLERANCE_RPS);
 
-  // Interpolation table: looks up the right speed for a given distance
-  // Built once at startup from the DISTANCE_SPEED_MAP in ShooterConstants
-  private final InterpolatingDoubleTreeMap distanceSpeedMap = new InterpolatingDoubleTreeMap();
+  // Interpolation table: looks up the right speed for a given tag area
+  // Built once at startup from the AREA_SPEED_MAP in ShooterConstants
+  private final InterpolatingDoubleTreeMap areaSpeedMap = new InterpolatingDoubleTreeMap();
 
   public Shooter() {
-    // Build the distance → speed lookup table from constants
-    for (double[] point : ShooterConstants.DISTANCE_SPEED_MAP) {
-      distanceSpeedMap.put(point[0], point[1]);
+    // Build the area → speed lookup table from constants
+    for (double[] point : ShooterConstants.AREA_SPEED_MAP) {
+      areaSpeedMap.put(point[0], point[1]);
     }
 
     // Configure the leader motor
@@ -144,26 +145,53 @@ public class Shooter extends SubsystemBase {
   }
 
   /**
-   * Spin the shooter at a speed that automatically adjusts based on distance.
+   * Spin the shooter at a speed based on the current AprilTag area.
+   * Larger area (closer) = slower. Smaller area (farther) = faster.
+   * Recalculates speed every loop cycle. Stops on command cancel.
    *
-   * <p>Uses the DISTANCE_SPEED_MAP lookup table in ShooterConstants — closer targets
-   * get a lower speed, farther targets get a higher speed.
-   * The speed is recalculated every loop so it tracks distance in real time.
+   * For teleop use with .whileTrue() binding.
    *
-   * <p>Designed for the right trigger in teleop (bonus distance mode):
-   * motors run while trigger is held, stop on release.
-   *
-   * @param distanceMeters Supplier for the current distance to the target in meters.
-   *     Use {@code limelight::getAvgTagDistance} for AprilTag-based distance.
-   * @return Command that adjusts speed to distance while active, stops on cancel
+   * @param areaSupplier Supplier for current tag area (0-100 from getTA())
    */
-  public Command spinAtDistanceWhileHeld(DoubleSupplier distanceMeters) {
-    return run(
-            () ->
-                setVelocity(
-                    RotationsPerSecond.of(distanceSpeedMap.get(distanceMeters.getAsDouble()))))
+  public Command spinAtAreaWhileHeld(DoubleSupplier areaSupplier) {
+    return run(() -> {
+            double area = areaSupplier.getAsDouble();
+            double speed;
+            if (area < 0.01) {
+                speed = ShooterConstants.FALLBACK_SPEED_RPS;
+            } else {
+                speed = areaSpeedMap.get(area);
+            }
+            speed = MathUtil.clamp(speed,
+                ShooterConstants.MIN_SHOOTER_SPEED_RPS,
+                ShooterConstants.MAX_SHOOTER_SPEED_RPS);
+            setVelocity(RotationsPerSecond.of(speed));
+        })
         .finallyDo(() -> stop())
-        .withName("ShooterSpinAtDistance");
+        .withName("ShooterSpinAtArea");
+  }
+
+  /**
+   * Set shooter speed based on current tag area, then release.
+   * The TalonFX holds speed on its own. For use in auto sequences.
+   *
+   * @param areaSupplier Supplier for current tag area (0-100 from getTA())
+   */
+  public Command spinUpForArea(DoubleSupplier areaSupplier) {
+    return runOnce(() -> {
+            double area = areaSupplier.getAsDouble();
+            double speed;
+            if (area < 0.01) {
+                speed = ShooterConstants.FALLBACK_SPEED_RPS;
+            } else {
+                speed = areaSpeedMap.get(area);
+            }
+            speed = MathUtil.clamp(speed,
+                ShooterConstants.MIN_SHOOTER_SPEED_RPS,
+                ShooterConstants.MAX_SHOOTER_SPEED_RPS);
+            setVelocity(RotationsPerSecond.of(speed));
+        })
+        .withName("ShooterSpinUpForArea");
   }
 
   /**
