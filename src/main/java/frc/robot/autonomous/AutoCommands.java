@@ -1,9 +1,17 @@
 package frc.robot.autonomous;
 
+import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
+import com.ctre.phoenix6.swerve.SwerveModule.SteerRequestType;
+import com.ctre.phoenix6.swerve.SwerveRequest;
+import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.filter.Debouncer;
+import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import frc.robot.constants.VisionConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
+import frc.robot.subsystems.vision.LimelightSubsystem;
 
 /**
  * Pre-built driving commands for autonomous mode.
@@ -34,6 +42,11 @@ public class AutoCommands {
 
   private final LinearPathRequest pathRequest;
 
+  private final SwerveRequest.RobotCentric robotCentric =
+      new SwerveRequest.RobotCentric()
+          .withDriveRequestType(DriveRequestType.Velocity)
+          .withSteerRequestType(SteerRequestType.MotionMagicExpo);
+
   /**
    * Creates AutoCommands using your robot's drive system.
    *
@@ -54,7 +67,11 @@ public class AutoCommands {
    * @return Command that drives the robot there
    */
   public Command driveTo(Pose2d pose) {
-    return drivetrain.runOnce(() -> pathRequest.reset(drivetrain.getPose(), drivetrain.getFieldSpeeds())).andThen(drivetrain.applyRequest(() -> pathRequest.withTargetPose(pose)));
+    return drivetrain.runOnce(() -> pathRequest.reset(drivetrain.getPose(), drivetrain.getFieldSpeeds()))
+        .andThen(
+            drivetrain.applyRequest(() -> pathRequest.withTargetPose(pose))
+                .until(() -> pathRequest.isFinished()))
+        .withName("DriveTo");
   }
   
   /**
@@ -124,5 +141,112 @@ public class AutoCommands {
       double distance = currentPose.getTranslation().getDistance(targetPose.getTranslation());
       return distance <= triggerDistance;
     }).andThen(command);
+  }
+
+  // ==================== Vision-Drive Building Blocks ====================
+
+  /**
+   * Drive backward (robot-relative, -X) until any of the specified tags is visible.
+   * Stops driving when a tag is found OR when timeout expires.
+   *
+   * @param limelight Vision subsystem to check for tags
+   * @param tagIds Array of AprilTag IDs to look for
+   * @param speedMps Backward driving speed in m/s (positive value, will be negated)
+   * @param timeoutSeconds Maximum time to drive before giving up
+   */
+  public Command driveBackwardUntilTag(LimelightSubsystem limelight, int[] tagIds,
+      double speedMps, double timeoutSeconds) {
+    return drivetrain.applyRequest(() -> robotCentric.withVelocityX(-speedMps))
+        .until(() -> limelight.hasSpecificTag(tagIds))
+        .withTimeout(timeoutSeconds)
+        .withName("DriveBackwardUntilTag");
+  }
+
+  /**
+   * Rotate in place to center on a specific hub tag.
+   *
+   * Three-way logic each loop cycle:
+   *   a) Center tag is primary target -> P-control on TX with camera offset correction
+   *   b) A different tag is primary (side tag) -> spin toward it using TX sign
+   *   c) No tag visible -> slow fallback spin
+   *
+   * Exits when the center tag is centered within 3 degrees for 0.05 seconds (Debouncer).
+   *
+   * @param limelight Vision subsystem
+   * @param centerTagId The center hub tag ID to align to (26 blue, 10 red)
+   * @param timeoutSeconds Maximum alignment time
+   */
+  public Command alignToHubTag(LimelightSubsystem limelight, int centerTagId,
+      double timeoutSeconds) {
+    Debouncer centeredDebouncer = new Debouncer(0.05, DebounceType.kRising);
+    return drivetrain.applyRequest(() -> {
+          double rotRate;
+          int primaryId = limelight.getTargetId();
+          if (primaryId == centerTagId) {
+            // Center tag is primary — P-control to align robot center on it
+            double error = limelight.getTargetTX() - VisionConstants.CAMERA_TX_OFFSET_DEG;
+            rotRate = MathUtil.clamp(
+                -error * VisionConstants.DRIVE_TO_TAG_TURN_KP,
+                -VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S,
+                VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S);
+          } else if (primaryId != 0) {
+            // Side tag visible — spin toward it; the center tag is just past it.
+            double tx = limelight.getTargetTX();
+            rotRate = (tx > 0) ? -0.3 : 0.3;
+          } else {
+            // No tag visible — slow fallback spin
+            rotRate = 0.3;
+          }
+          return robotCentric.withVelocityX(0.0).withRotationalRate(rotRate);
+        })
+        .until(() -> centeredDebouncer.calculate(
+            limelight.getTargetId() == centerTagId
+                && Math.abs(limelight.getTargetTX() - VisionConstants.CAMERA_TX_OFFSET_DEG) <= 3.0))
+        .withTimeout(timeoutSeconds)
+        .withName("AlignToHubTag");
+  }
+
+  /**
+   * Spin in place (no forward/backward movement) until any of the specified tags
+   * is visible, or timeout expires.
+   *
+   * @param limelight Vision subsystem
+   * @param tagIds Array of tag IDs to search for
+   * @param spinRateRadS Rotation speed in rad/s (positive = CCW)
+   * @param timeoutSeconds Maximum search time
+   */
+  public Command spinToFindTag(LimelightSubsystem limelight, int[] tagIds,
+      double spinRateRadS, double timeoutSeconds) {
+    return drivetrain.applyRequest(() ->
+            robotCentric.withVelocityX(0.0).withRotationalRate(spinRateRadS))
+        .until(() -> limelight.hasSpecificTag(tagIds))
+        .withTimeout(timeoutSeconds)
+        .withName("SpinToFindTag");
+  }
+
+  /**
+   * Blind spin (no exit condition other than time). Used to rotate away from
+   * a known area before starting a tag search, preventing false-positive exits.
+   *
+   * @param spinRateRadS Rotation speed in rad/s (positive = CCW)
+   * @param durationSeconds How long to spin
+   */
+  public Command blindSpin(double spinRateRadS, double durationSeconds) {
+    return drivetrain.applyRequest(() ->
+            robotCentric.withVelocityX(0.0).withRotationalRate(spinRateRadS))
+        .withTimeout(durationSeconds)
+        .withName("BlindSpin");
+  }
+
+  // ==================== Utility Building Blocks ====================
+
+  /** Wait for a specified duration. Convenience wrapper. */
+  public Command waitSeconds(double seconds) {
+    return Commands.waitSeconds(seconds).withName("Wait");
+  }
+
+  /** Print a message to console. Useful for tracing auto execution. */
+  public Command log(String message) {
+    return Commands.print(message).withName("Log");
   }
 }

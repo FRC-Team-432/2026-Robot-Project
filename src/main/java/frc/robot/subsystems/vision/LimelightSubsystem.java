@@ -274,6 +274,11 @@ public class LimelightSubsystem extends SubsystemBase {
     return LimelightHelpers.getTY(limelightName);
   }
 
+  /** Returns the primary target area (0-100 scale), or 0.0 if no target visible. */
+  public double getTargetArea() {
+    return LimelightHelpers.getTA(limelightName);
+  }
+
   /**
    * Returns the fiducial ID of the primary tracked target.
    * Returns 0 if no target is visible (0 is never a valid AprilTag ID).
