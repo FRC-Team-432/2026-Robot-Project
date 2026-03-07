@@ -91,7 +91,7 @@ public class AutoRoutines {
           climb.climbUpCommand().withTimeout(4.0),
           autoCommands.log("AUTO: Complete")
       );
-    }, Set.of(drivetrain, climb));
+    }, Set.of(drivetrain, climb, superstructure, limelight));
   }
 
   // ============================================================
