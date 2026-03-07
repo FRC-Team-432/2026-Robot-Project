@@ -78,7 +78,7 @@ public class Superstructure extends SubsystemBase {
   /** Stop the shooter and wait until it has fully stopped. */
   public Command stowAndWaitCommand() {
     return shooter.stopCommand()
-        .andThen(Commands.waitUntil(() -> !shooter.isAtTarget()))
+        .andThen(Commands.waitUntil(() -> shooter.isAtTarget()))
         .withName("StowAndWait");
   }
 
