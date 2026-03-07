@@ -16,9 +16,8 @@ import java.util.function.DoubleSupplier;
  * and does not need to be coordinated with the shooter.
  *
  * <p><b>Teleop shooting</b> (right trigger):
- * Use {@link #teleOpShootCommand()} to run all three motors at once while
- * the trigger is held. For distance-based speed, use
- * {@link #teleOpShootWithDistanceCommand(DoubleSupplier)} instead.
+ * Use {@link #teleOpShootWithAreaCommand(DoubleSupplier)} for area-based speed
+ * adjustment, or {@link #teleOpShootCommand()} for fixed speed.
  *
  * <p><b>Auto shooting</b>: use the prepare → shoot → stow sequence:
  * <pre>
@@ -56,17 +55,24 @@ public class Superstructure extends SubsystemBase {
   }
 
   /**
-   * Same as {@link #teleOpShootCommand()} but shooter speed adjusts based on
-   * distance to target — closer = slower, farther = faster.
-   *
-   * @param distanceMeters Supplier for current distance to target (meters)
-   * @return Command that runs distance-adjusted shooter + feeder while active
+   * Teleop: run shooter at area-based speed + feeder simultaneously.
+   * Both stop when the command ends (trigger released).
    */
-  public Command teleOpShootWithDistanceCommand(DoubleSupplier distanceMeters) {
+  public Command teleOpShootWithAreaCommand(DoubleSupplier areaSupplier) {
     return Commands.parallel(
-            shooter.spinAtDistanceWhileHeld(distanceMeters),
+            shooter.spinAtAreaWhileHeld(areaSupplier),
             feeder.feedWhileHeld())
-        .withName("TeleOpShootWithDistance");
+        .withName("TeleOpShootWithArea");
+  }
+
+  /**
+   * Auto: spin up shooter based on tag area, wait until at speed.
+   * Reads area once at the moment this command starts.
+   */
+  public Command spinUpForAreaAndWaitCommand(DoubleSupplier areaSupplier) {
+    return shooter.spinUpForArea(areaSupplier)
+        .andThen(Commands.waitUntil(() -> shooter.isAtTarget()))
+        .withName("SpinUpForAreaAndWait");
   }
 
   // ==================== State Commands ====================

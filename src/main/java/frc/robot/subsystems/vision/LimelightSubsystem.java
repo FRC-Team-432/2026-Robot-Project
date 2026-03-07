@@ -259,6 +259,11 @@ public class LimelightSubsystem extends SubsystemBase {
 
   // ==================== Accessors for DriveToTagCommand ====================
 
+  /** Returns the primary target area (0-100 scale), or 0.0 if no target visible. */
+  public double getTargetArea() {
+    return LimelightHelpers.getTA(limelightName);
+  }
+
   /** Returns true if the Limelight currently sees a valid target. */
   public boolean hasTarget() {
     return LimelightHelpers.getTV(limelightName);
