@@ -199,14 +199,10 @@ public class RobotContainer {
     joystick.a().whileTrue(climb.climbDownCommand());
 
     // ==================== Shooter ====================
-    // Right trigger — hold to shoot. Both shooter wheels + feeder run simultaneously.
+    // Right trigger — shoot with area-based speed adjustment.
+    // Shooter speed adjusts based on how large the AprilTag appears in the camera.
     // Everything stops the moment the trigger is released.
-    joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootCommand());
-
-    // --- Distance-based shooting (bonus) ---
-    // Uncomment the line below (and comment out the line above) to enable automatic
-    // speed adjustment based on AprilTag distance from the Limelight.
-    // joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootWithDistanceCommand(limelight::getAvgTagDistance));
+    joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootWithAreaCommand(limelight::getTargetArea));
 
     // ==================== Intake ====================
     // Left trigger — hold to intake. Left bumper — hold to eject.
