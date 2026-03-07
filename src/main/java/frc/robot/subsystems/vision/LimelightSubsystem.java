@@ -338,6 +338,11 @@ public class LimelightSubsystem extends SubsystemBase {
     return Double.isNaN(bestTX) ? OptionalDouble.empty() : OptionalDouble.of(bestTX);
   }
 
+  /** Returns the primary target area (0-100 scale), or 0.0 if no target visible. */
+  public double getTargetArea() {
+    return LimelightHelpers.getTA(limelightName);
+  }
+
   /** Returns the distance to the nearest visible tag in meters, or -1 if none visible. */
   public double getNearestTagDistance() {
     LimelightHelpers.RawFiducial[] fiducials =
