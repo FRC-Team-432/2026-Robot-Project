@@ -185,6 +185,11 @@ public class LimelightSubsystem extends SubsystemBase {
     return ambiguity;
   }
 
+  /** Returns the primary target area (0-100 scale), or 0.0 if no target visible. */
+  public double getTargetArea() {
+    return LimelightHelpers.getTA(limelightName);
+  }
+
   // ==================== AprilTag Logging ====================
 
   private void logAprilTagData() {

@@ -35,10 +35,10 @@ public final class ShooterConstants {
   // ==================== Shooter Speed ====================
 
   /**
-   * Fixed shooting speed in rotations per second.
+   * Fixed shooting speed in rotations per second (fallback for non-area-based modes).
    * TODO: Tune this on the real robot — start low and increase until balls reach target.
    */
-  public static final double SHOOTER_SPEED_RPS = 200.0;
+  public static final double SHOOTER_SPEED_RPS = 35.0;
 
   // ==================== Feeder Speed ====================
 
@@ -48,21 +48,36 @@ public final class ShooterConstants {
    */
   public static final double FEEDER_SPEED_PERCENT = 0.2;
 
-  // ==================== Distance-Based Shooting (Bonus) ====================
-  // Maps distance from target (meters) to required shooter speed (RPS).
-  // The robot interpolates between these points automatically.
+  // ==================== Area-Based Shooting ====================
+  // Maps Limelight target area (getTA(), 0-100 scale) to shooter speed (RPS).
+  // LARGER area = CLOSER to target = SLOWER speed.
+  // SMALLER area = FARTHER from target = FASTER speed.
   //
-  // TODO: Test and fill in real values after characterizing on the robot.
-  //       Add more rows for better accuracy at more distances.
-  //       Format: { distanceMeters, shooterSpeedRPS }
-
-  public static final double[][] DISTANCE_SPEED_MAP = {
-    {1.0, 20.0}, // 1 meter from target → 20 RPS
-    {2.0, 25.0}, // 2 meters from target → 25 RPS
-    {3.0, 30.0}, // 3 meters from target → 30 RPS
-    {4.0, 35.0}, // 4 meters from target → 35 RPS
-    {5.0, 40.0}, // 5 meters from target → 40 RPS
+  // HOW TO TUNE AT COMPETITION:
+  //   1. Drive robot to a shooting distance
+  //   2. Read "Limelight/TA" from SmartDashboard (this is the area value)
+  //   3. Manually adjust shooter speed until shots score consistently
+  //   4. Record the {area, speed} pair below
+  //   5. Repeat at 3-4 different distances
+  //
+  // These are PLACEHOLDER values - you MUST tune them on the real robot.
+  public static final double[][] AREA_SPEED_MAP = {
+    // { tagAreaPercent, shooterSpeedRPS }
+    {0.0,  35.0},  // No/tiny target - use fallback speed
+    {0.5,  45.0},  // Very far away - high speed
+    {1.0,  40.0},  // Far
+    {2.0,  35.0},  // Medium-far
+    {5.0,  28.0},  // Medium
+    {10.0, 22.0},  // Close
+    {15.0, 18.0},  // Very close - low speed
   };
+
+  // Speed when no tag is visible (safe medium value)
+  public static final double FALLBACK_SPEED_RPS = 35.0;
+
+  // Safety limits
+  public static final double MAX_SHOOTER_SPEED_RPS = 50.0;
+  public static final double MIN_SHOOTER_SPEED_RPS = 15.0;
 
   // ==================== Auto Fire Duration ====================
 
@@ -96,8 +111,8 @@ public final class ShooterConstants {
 
   // ==================== Motion Magic Limits ====================
 
-  /** Maximum shooter speed (RPS) — acts as a safety ceiling */
-  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 100.0;
+  /** Maximum shooter speed (RPS) — acts as a safety ceiling (must be >= MAX_SHOOTER_SPEED_RPS) */
+  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 60.0;
 
   /** How fast the shooter can spin up (RPS per second) */
   public static final double MOTION_MAGIC_ACCELERATION = 1000.0;

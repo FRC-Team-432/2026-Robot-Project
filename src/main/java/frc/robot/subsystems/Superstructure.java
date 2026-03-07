@@ -59,14 +59,37 @@ public class Superstructure extends SubsystemBase {
    * Same as {@link #teleOpShootCommand()} but shooter speed adjusts based on
    * distance to target — closer = slower, farther = faster.
    *
+   * @deprecated Use {@link #teleOpShootWithAreaCommand(DoubleSupplier)} instead.
    * @param distanceMeters Supplier for current distance to target (meters)
-   * @return Command that runs distance-adjusted shooter + feeder while active
+   * @return Command that runs fixed-speed shooter + feeder while active
    */
+  @Deprecated
   public Command teleOpShootWithDistanceCommand(DoubleSupplier distanceMeters) {
     return Commands.parallel(
-            shooter.spinAtDistanceWhileHeld(distanceMeters),
+            shooter.spinWhileHeld(),
             feeder.feedWhileHeld())
         .withName("TeleOpShootWithDistance");
+  }
+
+  /**
+   * Teleop: run shooter at area-based speed + feeder simultaneously.
+   * Both stop when the command ends (trigger released).
+   */
+  public Command teleOpShootWithAreaCommand(DoubleSupplier areaSupplier) {
+    return Commands.parallel(
+            shooter.spinAtAreaWhileHeld(areaSupplier),
+            feeder.feedWhileHeld())
+        .withName("TeleOpShootWithArea");
+  }
+
+  /**
+   * Auto: spin up shooter based on tag area, wait until at speed.
+   * Reads area once at the moment this command starts.
+   */
+  public Command spinUpForAreaAndWaitCommand(DoubleSupplier areaSupplier) {
+    return shooter.spinUpForArea(areaSupplier)
+        .andThen(Commands.waitUntil(() -> shooter.isAtTarget()))
+        .withName("SpinUpForAreaAndWait");
   }
 
   // ==================== State Commands ====================
