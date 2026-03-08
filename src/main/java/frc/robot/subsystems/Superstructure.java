@@ -1,6 +1,7 @@
 package frc.robot.subsystems;
 
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.units.Units;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -88,7 +89,8 @@ public class Superstructure extends SubsystemBase {
   /** Stop the shooter and wait until it has fully stopped. */
   public Command stowAndWaitCommand() {
     return shooter.stopCommand()
-        .andThen(Commands.waitUntil(() -> !shooter.isAtTarget()))
+        .andThen(Commands.waitUntil(() ->
+            shooter.getVelocity().in(Units.RotationsPerSecond) < ShooterConstants.VELOCITY_TOLERANCE_RPS))
         .withName("StowAndWait");
   }
 
