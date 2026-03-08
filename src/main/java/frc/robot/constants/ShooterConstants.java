@@ -64,7 +64,7 @@ public final class ShooterConstants {
   // These are PLACEHOLDER values - you MUST tune them on the real robot.
   public static final double[][] AREA_SPEED_MAP = {
     // { tagAreaPercent, shooterSpeedRPS }
-    {0.0,  35.0},  // No/tiny target - use fallback speed
+    {0.0,  45.0},  // No/tiny target - anchor at max speed so interpolation is monotonically decreasing
     {0.5,  45.0},  // Very far away - high speed
     {1.0,  40.0},  // Far
     {2.0,  35.0},  // Medium-far
