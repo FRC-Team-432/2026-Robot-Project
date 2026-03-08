@@ -9,7 +9,6 @@ import frc.robot.constants.VisionConstants;
 import frc.robot.constants.Waypoints;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Superstructure;
-import frc.robot.subsystems.climb.Climb;
 import frc.robot.subsystems.vision.LimelightSubsystem;
 import java.util.Set;
 
@@ -20,19 +19,16 @@ public class AutoRoutines {
   private final Superstructure superstructure;
   private final CommandSwerveDrivetrain drivetrain;
   private final LimelightSubsystem limelight;
-  private final Climb climb;
 
   public AutoRoutines(
       AutoCommands autoCommands,
       Superstructure superstructure,
       CommandSwerveDrivetrain drivetrain,
-      LimelightSubsystem limelight,
-      Climb climb) {
+      LimelightSubsystem limelight) {
     this.autoCommands = autoCommands;
     this.superstructure = superstructure;
     this.drivetrain = drivetrain;
     this.limelight = limelight;
-    this.climb = climb;
   }
 
   // ============================================================
@@ -43,8 +39,6 @@ public class AutoRoutines {
   //   3. Rotate in place until the hub tag is centered (max 5 sec), then STOP.
   //   4. Spin up shooter at area-based speed (max 3 sec)
   //   5. Shoot + Stow
-  //   6. Mandatory blind spin then search for climb tags
-  //   7. Climb up (max 4 sec)
   // ============================================================
   private Command visionDriveAndShoot(Pose2d startPose) {
     return Commands.defer(() -> {
@@ -56,10 +50,6 @@ public class AutoRoutines {
       int centerTagId = isBlue
           ? VisionConstants.BLUE_HUB_CENTER_TAG_IDS[0]
           : VisionConstants.RED_HUB_CENTER_TAG_IDS[0];
-      int[] climbTagIds = isBlue
-          ? VisionConstants.BLUE_CLIMB_TAG_IDS
-          : VisionConstants.RED_CLIMB_TAG_IDS;
-
       return Commands.sequence(
           // Setup
           autoCommands.resetPose(startPose),
@@ -80,18 +70,9 @@ public class AutoRoutines {
           // Phase 4: Fire and stow
           superstructure.shootCommand(),
           superstructure.stowCommand(),
-          autoCommands.log("AUTO: Phase 5 - searching for climb tags"),
-
-          // Phase 5: Mandatory blind spin then search for climb tags
-          autoCommands.blindSpin(0.6, 1.5),
-          autoCommands.spinToFindTag(limelight, climbTagIds, 0.6, 8.5),
-          autoCommands.log("AUTO: Phase 6 - climbing"),
-
-          // Phase 6: Climb
-          climb.climbUpCommand().withTimeout(4.0),
           autoCommands.log("AUTO: Complete")
       );
-    }, Set.of(drivetrain, superstructure, climb));
+    }, Set.of(drivetrain, superstructure));
   }
 
   // ============================================================
