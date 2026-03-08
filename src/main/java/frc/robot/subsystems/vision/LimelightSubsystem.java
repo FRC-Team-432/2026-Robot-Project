@@ -127,8 +127,10 @@ public class LimelightSubsystem extends SubsystemBase {
       robotPoseTimestamp = poseEstimate.timestampSeconds;
       tagCount = poseEstimate.tagCount;
       avgTagDistance = poseEstimate.avgTagDist;
-      ambiguity = poseEstimate.rawFiducials[0].ambiguity;
-      poseRawFiducials = poseEstimate.rawFiducials;
+      ambiguity = (poseEstimate.rawFiducials != null && poseEstimate.rawFiducials.length > 0)
+          ? poseEstimate.rawFiducials[0].ambiguity : 0.0;
+      poseRawFiducials = (poseEstimate.rawFiducials != null)
+          ? poseEstimate.rawFiducials : new LimelightHelpers.RawFiducial[0];
     } else {
       robotPose = new Pose2d();
       robotPoseTimestamp = 0.0;
@@ -237,10 +239,11 @@ public class LimelightSubsystem extends SubsystemBase {
 
     LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
 
-    // Always log when a target is visible (useful data, not spammy)
-    DataLogManager.log(String.format(
-        "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
-        tagCount, tx, ty, ta, avgTagDistance, ambiguity));
+    if (shouldLog) {
+      DataLogManager.log(String.format(
+          "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
+          tagCount, tx, ty, ta, avgTagDistance, ambiguity));
+    }
 
     for (int i = 0; i < fiducials.length; i++) {
       LimelightHelpers.RawFiducial f = fiducials[i];
@@ -254,9 +257,11 @@ public class LimelightSubsystem extends SubsystemBase {
       SmartDashboard.putNumber(prefix + "/DistToRobot", f.distToRobot);
       SmartDashboard.putNumber(prefix + "/Ambiguity", f.ambiguity);
 
-      DataLogManager.log(String.format(
-          "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f",
-          i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity));
+      if (shouldLog) {
+        DataLogManager.log(String.format(
+            "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f",
+            i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity));
+      }
     }
   }
 
@@ -327,7 +332,7 @@ public class LimelightSubsystem extends SubsystemBase {
    * centered in the camera frame. Returns empty if none of the specified tags are visible.
    */
   public OptionalDouble getTXForTags(int[] tagIds) {
-    LimelightHelpers.RawFiducial[] fiducials = LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
     double bestTX = Double.NaN;
     double bestAbsTX = Double.MAX_VALUE;
     for (LimelightHelpers.RawFiducial f : fiducials) {
@@ -348,8 +353,7 @@ public class LimelightSubsystem extends SubsystemBase {
 
   /** Returns the distance to the nearest visible tag in meters, or -1 if none visible. */
   public double getNearestTagDistance() {
-    LimelightHelpers.RawFiducial[] fiducials =
-        LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
     if (fiducials.length == 0) {
       return -1.0;
     }
