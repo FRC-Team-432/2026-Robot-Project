@@ -67,7 +67,7 @@ public class Superstructure extends SubsystemBase {
   @Deprecated
   public Command teleOpShootWithDistanceCommand(DoubleSupplier distanceMeters) {
     return Commands.parallel(
-            shooter.spinWhileHeld(),
+            shooter.spinAtAreaWhileHeld(distanceMeters),
             feeder.feedWhileHeld())
         .withName("TeleOpShootWithDistance");
   }
