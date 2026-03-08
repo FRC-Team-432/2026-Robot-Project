@@ -131,14 +131,8 @@ public class RobotContainer {
             .andThen(superstructure.shootCommand())
             .andThen(superstructure.stowCommand()));
 
-    NamedCommands.registerCommand("climbUp",
-        climb.climbUpCommand().withTimeout(3.0));
-
-    NamedCommands.registerCommand("climbDown",
-        climb.climbDownCommand().withTimeout(1.5));
-
     autoChooser = new SendableChooser<>();
-    autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight, climb);
+    autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight);
 
     // ---- Vision Autos (primary) ----
     // Alliance is read at enable time — robot backs up until it sees the hub AprilTag,
