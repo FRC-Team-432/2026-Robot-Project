@@ -55,6 +55,9 @@ public class Shooter extends SubsystemBase {
 
   // Controller that tells the leader motor what speed to reach
   private final MotionMagicVelocityVoltage velocityOut = new MotionMagicVelocityVoltage(0);
+  // Separate instance for the follower — Phoenix 6 uses per-instance trajectory state,
+  // so sharing velocityOut between two motors corrupts the internal ramp calculations.
+  private final MotionMagicVelocityVoltage followerVelocityOut = new MotionMagicVelocityVoltage(0);
 
   // How close the speed needs to be before we consider the shooter "ready"
   private final AngularVelocity tolerance =
@@ -120,13 +123,13 @@ public class Shooter extends SubsystemBase {
     // Both motors get the same velocity command. The follower's InvertedValue
     // in its config makes it spin the opposite physical direction automatically.
     leader.setControl(velocityOut.withVelocity(velocity));
-    follower.setControl(velocityOut.withVelocity(velocity));
+    follower.setControl(followerVelocityOut.withVelocity(velocity));
   }
 
   /** Stop both shooter motors. */
   private void stop() {
-    leader.stopMotor();
-    follower.stopMotor();
+    leader.setControl(velocityOut.withVelocity(RotationsPerSecond.of(0)));
+    follower.setControl(followerVelocityOut.withVelocity(RotationsPerSecond.of(0)));
   }
 
   // ==================== Commands ====================
