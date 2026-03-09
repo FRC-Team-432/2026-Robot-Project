@@ -24,7 +24,7 @@ public final class ClimbConstants {
    * TODO: Set this to the correct motor controller ID once assigned.
    * This motor is on the RoboRIO CAN bus (not CANivore).
    */
-  public static final int CLIMB_MOTOR_ID = 7;
+  public static final int CLIMB_MOTOR_ID = 8;
 
   // ==================== Speeds ====================
 

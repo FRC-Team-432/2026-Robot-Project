@@ -1,0 +1,3 @@
+-turn right until see's Hub AprilTag of the hub(depends on which team the AprilTags)
+-Drives towards/backwards/stay still depending on shooter velocity and shoot angle
+-

@@ -5,6 +5,51 @@ once real hardware is available. It is organized by priority — work top to bot
 
 ---
 
+## STEP 0 — Competition Auto Selection
+
+Do this in the pit **after you receive your alliance assignment and starting position**.
+
+### Which auto to select
+
+Open **SmartDashboard** (or Shuffleboard) and find the **"Auto Mode"** dropdown.
+Select based on where the robot will be placed on the field:
+
+| Starting position | Select this auto | Starting pose |
+|---|---|---|
+| Left side of alliance wall | **Left Start** | x=7.15, y=6.05, heading=-120° |
+| Center of alliance wall | **Center Start** *(default)* | x=7.15, y=4.05, heading=0° |
+| Right side of alliance wall | **Right Start** | x=7.15, y=2.05, heading=120° |
+
+> **Default is Center Start.** If you forget to select, the robot will run the center routine.
+
+### Filling in each auto routine
+
+Each starting position has its own method in `AutoRoutines.java`. To add actions, open
+the file, find the correct method (`leftStartAuto`, `centerStartAuto`, `rightStartAuto`),
+and uncomment the blocks you want — or paste in new blocks from `AUTO-BLOCKS.md`.
+
+```java
+// Example: center auto that shoots then drives out
+public Command centerStartAuto() {
+    return Commands.sequence(
+        autoCommands.resetPose(Waypoints.START_CENTER),
+        superstructure.speakerCloseAndWaitCommand(),   // spin up shooter
+        superstructure.shootCommand(),                  // fire
+        autoCommands.driveTo(Waypoints.MIDFIELD_CENTER) // leave zone
+    );
+}
+```
+
+### Alliance color
+
+WPILib automatically mirrors waypoints for the red alliance using the Driver Station
+alliance value — **no code changes needed**. Just make sure the Driver Station is
+connected and showing the correct alliance before enabling.
+
+---
+
+---
+
 ## STEP 1 — Hardware Setup (do before powering any motor)
 
 These are IDs and names that must match the physical hardware. Wrong values here will
@@ -22,11 +67,27 @@ cause the robot to control the wrong motor or not find devices at all.
 > **Note:** All shooter, feeder, and climb motors are on the **RoboRIO CAN bus**.
 > The swerve drivetrain is on the **CANivore** bus and is configured separately via Tuner X.
 
-### Limelight Camera Name
+### Limelight Camera Names
 
-| Location | Current Value | What to do |
-|---|---|---|
-| `RobotContainer.java` | `"limelight"` | Must exactly match the hostname set in the Limelight web UI. |
+| Field in `RobotContainer.java` | Current hostname | Camera location | What to do |
+|---|---|---|---|
+| `limelight` | `"limelight"` | Front of robot | Must match hostname set in this camera's Limelight web UI |
+| `limelightBack` | `"limelight-back"` | Back of robot (climb) | Must match hostname set in this camera's Limelight web UI |
+
+> Set hostnames in each camera's web UI → Settings → Hostname.
+> Both cameras must be reachable on the robot network before enabling.
+
+### Climb AprilTag IDs
+
+The back camera uses these tag IDs to align during the climb. Verify against the game manual.
+
+| Constant | File | Current Value | What to do |
+|---|---|---|---|
+| `BLUE_CLIMB_TAG_IDS` | `VisionConstants.java` | `{14, 15}` | Confirm IDs on the blue alliance climb structure |
+| `RED_CLIMB_TAG_IDS` | `VisionConstants.java` | `{4, 5}` | Confirm IDs on the red alliance climb structure |
+
+> To use in an auto routine: `limelightBack.getTXForTags(VisionConstants.BLUE_CLIMB_TAG_IDS)`
+> Returns the horizontal angle to the most-centered climb tag — use this to drive the robot into alignment.
 
 ---
 

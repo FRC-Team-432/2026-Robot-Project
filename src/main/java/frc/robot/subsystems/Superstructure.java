@@ -1,6 +1,7 @@
 package frc.robot.subsystems;
 
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.units.Units;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -64,9 +65,30 @@ public class Superstructure extends SubsystemBase {
    */
   public Command teleOpShootWithDistanceCommand(DoubleSupplier distanceMeters) {
     return Commands.parallel(
-            shooter.spinAtDistanceWhileHeld(distanceMeters),
+            shooter.spinAtAreaWhileHeld(distanceMeters),
             feeder.feedWhileHeld())
         .withName("TeleOpShootWithDistance");
+  }
+
+  /**
+   * Teleop: run shooter at area-based speed + feeder simultaneously.
+   * Both stop when the command ends (trigger released).
+   */
+  public Command teleOpShootWithAreaCommand(DoubleSupplier areaSupplier) {
+    return Commands.parallel(
+            shooter.spinAtAreaWhileHeld(areaSupplier),
+            feeder.feedWhileHeld())
+        .withName("TeleOpShootWithArea");
+  }
+
+  /**
+   * Auto: spin up shooter based on tag area, wait until at speed.
+   * Reads area once at the moment this command starts.
+   */
+  public Command spinUpForAreaAndWaitCommand(DoubleSupplier areaSupplier) {
+    return shooter.spinUpForArea(areaSupplier)
+        .andThen(Commands.waitUntil(() -> shooter.isAtTarget()))
+        .withName("SpinUpForAreaAndWait");
   }
 
   // ==================== State Commands ====================
@@ -81,7 +103,8 @@ public class Superstructure extends SubsystemBase {
   /** Stop the shooter and wait until it has fully stopped. */
   public Command stowAndWaitCommand() {
     return shooter.stopCommand()
-        .andThen(Commands.waitUntil(() -> !shooter.isAtTarget()))
+        .andThen(Commands.waitUntil(() ->
+            shooter.getVelocity().in(Units.RotationsPerSecond) < ShooterConstants.VELOCITY_TOLERANCE_RPS))
         .withName("StowAndWait");
   }
 

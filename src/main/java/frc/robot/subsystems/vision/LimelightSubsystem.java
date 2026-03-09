@@ -3,6 +3,7 @@ package frc.robot.subsystems.vision;
 import com.ctre.phoenix6.HootAutoReplay;
 import com.ctre.phoenix6.Utils;
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -47,6 +48,16 @@ public class LimelightSubsystem extends SubsystemBase {
   private int tagCount = 0; // How many AprilTags the camera can see
   private double avgTagDistance = 0.0; // Average distance to visible tags (meters)
   private double ambiguity = 0.0; // Ambiguity value across all visible tags
+
+  // Raw fiducials from the last successful pose estimate — used by hasSpecificTag().
+  // Populated from poseEstimate.rawFiducials (botpose_wpiblue array), which is reliable
+  // regardless of whether the standalone rawfiducials NT key is published.
+  private LimelightHelpers.RawFiducial[] poseRawFiducials = new LimelightHelpers.RawFiducial[0];
+
+  // Raw fiducials from the rawfiducials NT key, cached once per loop in fetchInputs().
+  // Caching avoids a race where the limelight (90 Hz) updates the NT entry between the
+  // logAprilTagData() read and the hasSpecificTag() read within the same 20 ms robot loop.
+  private LimelightHelpers.RawFiducial[] rawFiducialsCache = new LimelightHelpers.RawFiducial[0];
 
   // Throttle logging to ~1Hz (every 50 cycles at 20ms periodic)
   private int logCounter = 0;
@@ -103,6 +114,10 @@ public class LimelightSubsystem extends SubsystemBase {
   }
 
   private void fetchInputs() {
+    // Cache rawfiducials ONCE at the top of each loop — prevents a race condition where
+    // the limelight updates the NT entry between logAprilTagData() and hasSpecificTag().
+    rawFiducialsCache = LimelightHelpers.getRawFiducials(limelightName);
+
     // Get robot position estimate from Limelight (using blue alliance coordinates)
     LimelightHelpers.PoseEstimate poseEstimate =
         LimelightHelpers.getBotPoseEstimate_wpiBlue(limelightName);
@@ -112,13 +127,17 @@ public class LimelightSubsystem extends SubsystemBase {
       robotPoseTimestamp = poseEstimate.timestampSeconds;
       tagCount = poseEstimate.tagCount;
       avgTagDistance = poseEstimate.avgTagDist;
-      ambiguity = poseEstimate.rawFiducials[0].ambiguity;
+      ambiguity = (poseEstimate.rawFiducials != null && poseEstimate.rawFiducials.length > 0)
+          ? poseEstimate.rawFiducials[0].ambiguity : 0.0;
+      poseRawFiducials = (poseEstimate.rawFiducials != null)
+          ? poseEstimate.rawFiducials : new LimelightHelpers.RawFiducial[0];
     } else {
       robotPose = new Pose2d();
       robotPoseTimestamp = 0.0;
       tagCount = 0;
       avgTagDistance = 0.0;
       ambiguity = 0.0;
+      poseRawFiducials = new LimelightHelpers.RawFiducial[0];
     }
   }
 
@@ -137,9 +156,11 @@ public class LimelightSubsystem extends SubsystemBase {
       double thetaStdDev = VisionConstants.BASE_THETA_STD_DEV / tagCount; // Rotation trust
 
       // Trust the measurement less when tags are far away
-      double avgDistDev = Math.pow(avgTagDistance,2);
-      xyStdDev = xyStdDev * avgDistDev;
-      thetaStdDev = thetaStdDev * avgDistDev;
+      double avgDistDev = Math.pow(avgTagDistance, 2);
+      xyStdDev = MathUtil.clamp(xyStdDev * avgDistDev,
+          VisionConstants.MIN_XY_STD_DEV, VisionConstants.MAX_XY_STD_DEV);
+      thetaStdDev = MathUtil.clamp(thetaStdDev * avgDistDev,
+          VisionConstants.MIN_THETA_STD_DEV, VisionConstants.MAX_THETA_STD_DEV);
 
       // Give the measurement to the drivetrain along with trust levels
       drivetrain.addVisionMeasurement(
@@ -176,6 +197,26 @@ public class LimelightSubsystem extends SubsystemBase {
     boolean shouldLog = (logCounter++ % LOG_INTERVAL == 0);
 
     SmartDashboard.putBoolean("Limelight/HasTarget", hasTarget);
+    SmartDashboard.putNumber("Limelight/TargetID", LimelightHelpers.getFiducialID(limelightName));
+    SmartDashboard.putNumber("Limelight/PoseTagCount", tagCount);
+
+    // Climb tag diagnostics — updated every loop so SmartDashboard shows real-time state.
+    // Check each source individually so we can see WHICH source is (or isn't) firing.
+    boolean src1Blue = false;
+    for (LimelightHelpers.RawFiducial f : poseRawFiducials) {
+      if (f.id == 31 || f.id == 32) { src1Blue = true; break; }
+    }
+    int tid = (int) LimelightHelpers.getFiducialID(limelightName);
+    boolean src2Blue = (tid == 31 || tid == 32);
+    boolean src3Blue = false;
+    for (LimelightHelpers.RawFiducial f : rawFiducialsCache) {
+      if (f.id == 31 || f.id == 32) { src3Blue = true; break; }
+    }
+    SmartDashboard.putBoolean("Limelight/ClimbTag/Src1_Pose", src1Blue);
+    SmartDashboard.putBoolean("Limelight/ClimbTag/Src2_TID", src2Blue);
+    SmartDashboard.putBoolean("Limelight/ClimbTag/Src3_Raw", src3Blue);
+    SmartDashboard.putBoolean("Limelight/ClimbTag/AnyTrue", src1Blue || src2Blue || src3Blue);
+    SmartDashboard.putNumber("Limelight/RawCacheSize", rawFiducialsCache.length);
 
     if (!hasTarget) {
       SmartDashboard.putNumber("Limelight/TagCount", 0);
@@ -196,13 +237,13 @@ public class LimelightSubsystem extends SubsystemBase {
     SmartDashboard.putNumber("Limelight/AvgTagDistance", avgTagDistance);
     SmartDashboard.putNumber("Limelight/Ambiguity", ambiguity);
 
-    LimelightHelpers.RawFiducial[] fiducials =
-        LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
 
-    // Always log when a target is visible (useful data, not spammy)
-    DataLogManager.log(String.format(
-        "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
-        tagCount, tx, ty, ta, avgTagDistance, ambiguity));
+    if (shouldLog) {
+      DataLogManager.log(String.format(
+          "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
+          tagCount, tx, ty, ta, avgTagDistance, ambiguity));
+    }
 
     for (int i = 0; i < fiducials.length; i++) {
       LimelightHelpers.RawFiducial f = fiducials[i];
@@ -216,9 +257,11 @@ public class LimelightSubsystem extends SubsystemBase {
       SmartDashboard.putNumber(prefix + "/DistToRobot", f.distToRobot);
       SmartDashboard.putNumber(prefix + "/Ambiguity", f.ambiguity);
 
-      DataLogManager.log(String.format(
-          "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f",
-          i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity));
+      if (shouldLog) {
+        DataLogManager.log(String.format(
+            "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f",
+            i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity));
+      }
     }
   }
 
@@ -239,12 +282,62 @@ public class LimelightSubsystem extends SubsystemBase {
     return LimelightHelpers.getTY(limelightName);
   }
 
+  /** Returns the primary target area (0-100 scale), or 0.0 if no target visible. */
+  public double getTargetArea() {
+    return LimelightHelpers.getTA(limelightName);
+  }
+
+  /**
+   * Returns the fiducial ID of the primary tracked target.
+   * Returns 0 if no target is visible (0 is never a valid AprilTag ID).
+   * Does NOT gate on hasTarget() to avoid a race between the tv and tid NT keys.
+   */
+  public int getTargetId() {
+    return (int) LimelightHelpers.getFiducialID(limelightName);
+  }
+
+  /**
+   * Returns true if the camera sees a target whose fiducial ID is in {@code ids}.
+   *
+   * <p>Checks three sources in order of reliability:
+   * <ol>
+   *   <li>Fiducials cached from {@code botpose_wpiblue} — same source as pose estimation,
+   *       always populated when any AprilTag is visible for pose.
+   *   <li>{@code tid} NT key — the primary tracked target's ID.
+   *   <li>{@code rawfiducials} NT key — all visible fiducials (requires Limelight config).
+   * </ol>
+   */
+  public boolean hasSpecificTag(int[] ids) {
+    // Source 1: fiducials from the last pose estimate (most reliable — same as pose estimation)
+    for (LimelightHelpers.RawFiducial f : poseRawFiducials) {
+      for (int id : ids) {
+        if (f.id == id) return true;
+      }
+    }
+    // Source 2: primary target ID via tid key (0 = no target, never a valid AprilTag ID)
+    int primaryId = getTargetId();
+    if (primaryId != 0) {
+      for (int id : ids) {
+        if (primaryId == id) return true;
+      }
+    }
+    // Source 3: rawFiducialsCache — snapshot from getRawFiducials() taken at loop start.
+    // Using the cache guarantees this sees the same data as logAprilTagData() in the
+    // same periodic cycle, preventing a false miss due to NT update timing.
+    for (LimelightHelpers.RawFiducial f : rawFiducialsCache) {
+      for (int id : ids) {
+        if (f.id == id) return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Returns the horizontal angle (txnc, degrees) to whichever of the given tag IDs is most
    * centered in the camera frame. Returns empty if none of the specified tags are visible.
    */
   public OptionalDouble getTXForTags(int[] tagIds) {
-    LimelightHelpers.RawFiducial[] fiducials = LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
     double bestTX = Double.NaN;
     double bestAbsTX = Double.MAX_VALUE;
     for (LimelightHelpers.RawFiducial f : fiducials) {
@@ -260,8 +353,7 @@ public class LimelightSubsystem extends SubsystemBase {
 
   /** Returns the distance to the nearest visible tag in meters, or -1 if none visible. */
   public double getNearestTagDistance() {
-    LimelightHelpers.RawFiducial[] fiducials =
-        LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
     if (fiducials.length == 0) {
       return -1.0;
     }

@@ -21,7 +21,16 @@ import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
+import com.pathplanner.lib.config.PIDConstants;
+import com.pathplanner.lib.config.RobotConfig;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import java.util.Set;
 import frc.robot.autonomous.AutoCommands;
 import frc.robot.autonomous.AutoRoutines;
 import frc.robot.autonomous.LinearPathRequest;
@@ -82,7 +91,7 @@ public class RobotContainer {
 
   private final Superstructure superstructure = new Superstructure(shooter, feeder);
 
-  // Vision camera for tracking robot position and measuring distance to AprilTags
+  // Front camera — AprilTag odometry, hub tracking, and climb tag detection
   public final LimelightSubsystem limelight = new LimelightSubsystem("limelight", drivetrain);
 
   /* Autonomous mode selector */
@@ -90,10 +99,67 @@ public class RobotContainer {
   private final AutoRoutines autoRoutines;
 
   public RobotContainer() {
-    autoChooser = new SendableChooser<>();
-    autoRoutines = new AutoRoutines(autoCommands, superstructure);
+    // ==================== PathPlanner Setup ====================
+    // Configure AutoBuilder so PathPlanner can control the drivetrain.
+    // Uses the same PID gains already in AutoConstants.
+    SwerveRequest.ApplyRobotSpeeds autoRequest = new SwerveRequest.ApplyRobotSpeeds();
+    try {
+      AutoBuilder.configure(
+          drivetrain::getPose,
+          drivetrain::resetPose,
+          drivetrain::getRobotSpeeds,
+          (speeds, feedforwards) -> drivetrain.setControl(
+              autoRequest.withSpeeds(speeds)
+                  .withWheelForceFeedforwardsX(feedforwards.robotRelativeForcesXNewtons())
+                  .withWheelForceFeedforwardsY(feedforwards.robotRelativeForcesYNewtons())),
+          new PPHolonomicDriveController(
+              new PIDConstants(AutoConstants.X_CONTROLLER_KP, 0, 0),   // translation
+              new PIDConstants(AutoConstants.THETA_CONTROLLER_KP, 0, 0) // rotation
+          ),
+          RobotConfig.fromGUISettings(),
+          () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red,
+          drivetrain
+      );
+    } catch (Exception e) {
+      DriverStation.reportError("PathPlanner AutoBuilder setup failed: " + e.getMessage(), e.getStackTrace());
+    }
 
-    autoChooser.addOption("Mobility Auto", autoRoutines.mobilityAuto());
+    // ==================== PathPlanner Named Commands ====================
+    // These let PathPlanner trigger robot actions by name via Event Markers.
+    NamedCommands.registerCommand("shoot",
+        superstructure.speakerCloseAndWaitCommand()
+            .andThen(superstructure.shootCommand())
+            .andThen(superstructure.stowCommand()));
+
+    autoChooser = new SendableChooser<>();
+    autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight);
+
+    // ---- Vision Autos (primary) ----
+    // Alliance is read at enable time — robot backs up until it sees the hub AprilTag,
+    // locks on, then shoots. No pre-planned path needed.
+    autoChooser.setDefaultOption("Center Start", autoRoutines.centerStartAuto());
+    autoChooser.addOption("Left Start", autoRoutines.leftStartAuto());
+    autoChooser.addOption("Right Start", autoRoutines.rightStartAuto());
+
+    // ---- PathPlanner Autos (backup) ----
+    // Pre-planned paths. Use these if vision auto is not working on the day.
+    autoChooser.addOption("PathPlanner - Center", Commands.defer(
+        () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue
+            ? AutoBuilder.buildAuto("StartCenterAutoBlue")
+            : AutoBuilder.buildAuto("StartCenterAutoRed"),
+        Set.of(drivetrain)));
+
+    autoChooser.addOption("PathPlanner - Left", Commands.defer(
+        () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue
+            ? AutoBuilder.buildAuto("LeftStartAutoBlue")
+            : AutoBuilder.buildAuto("LeftStartAutoRed"),
+        Set.of(drivetrain)));
+
+    autoChooser.addOption("PathPlanner - Right", Commands.defer(
+        () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue
+            ? AutoBuilder.buildAuto("RightStartAutoBlue")
+            : AutoBuilder.buildAuto("RightStartAutoRed"),
+        Set.of(drivetrain)));
 
     SmartDashboard.putData("Auto Mode", autoChooser);
 
@@ -127,14 +193,8 @@ public class RobotContainer {
     joystick.a().whileTrue(climb.climbDownCommand());
 
     // ==================== Shooter ====================
-    // Right trigger — hold to shoot. Both shooter wheels + feeder run simultaneously.
-    // Everything stops the moment the trigger is released.
-    joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootCommand());
-
-    // --- Distance-based shooting (bonus) ---
-    // Uncomment the line below (and comment out the line above) to enable automatic
-    // speed adjustment based on AprilTag distance from the Limelight.
-    // joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootWithDistanceCommand(limelight::getAvgTagDistance));
+    // Right trigger - shoot with area-based speed adjustment
+    joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootWithAreaCommand(limelight::getTargetArea));
 
     // ==================== Intake ====================
     // Left trigger — hold to intake. Left bumper — hold to eject.

@@ -1,0 +1,8 @@
+-Robot starts on starting line, which is close to level with the edge of the hub/trench/bump. 
+        -It should not matter where along this line the robot starts, but preferably in the vacinity of the hub. 
+-Robot should back up until the limelight can see any tags located on the hub of our set alliance. 
+-If the robot sees a tag that is on the right of the hub, turn left(towards the center of the hub) until center tag comes into view, then stop. 
+-If the robot sees at tag that is on the left side of the hub, turn right(towards the center of the hub) until center tag comes into view, then stop.
+-If the robot sees the center tag, stop and do not turn, stay facing the tag.
+-Offsets will be added, because camera is located to the right side of the robot, and we want the code to know where the center of the robot is based on camera location
+-Once the robot is facing the center tag then run shoot motor for n amount of time. Help decide how long to shoot. We start with 8 balls, we only have 20 second for the autonomous period.  

@@ -1,0 +1,4 @@
+-need to shoot the correct velocity based on distance away
+-can use area that the tag takes up in limelight to calculate velocity
+-Shooter speed=(1-total area)*theoretical max velocity
+-check this math to make sure it would work for getting correct velocity
