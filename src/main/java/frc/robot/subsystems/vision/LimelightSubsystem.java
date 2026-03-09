@@ -3,6 +3,7 @@ package frc.robot.subsystems.vision;
 import com.ctre.phoenix6.HootAutoReplay;
 import com.ctre.phoenix6.Utils;
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -126,8 +127,10 @@ public class LimelightSubsystem extends SubsystemBase {
       robotPoseTimestamp = poseEstimate.timestampSeconds;
       tagCount = poseEstimate.tagCount;
       avgTagDistance = poseEstimate.avgTagDist;
-      ambiguity = poseEstimate.rawFiducials[0].ambiguity;
-      poseRawFiducials = poseEstimate.rawFiducials;
+      ambiguity = (poseEstimate.rawFiducials != null && poseEstimate.rawFiducials.length > 0)
+          ? poseEstimate.rawFiducials[0].ambiguity : 0.0;
+      poseRawFiducials = (poseEstimate.rawFiducials != null)
+          ? poseEstimate.rawFiducials : new LimelightHelpers.RawFiducial[0];
     } else {
       robotPose = new Pose2d();
       robotPoseTimestamp = 0.0;
@@ -153,9 +156,11 @@ public class LimelightSubsystem extends SubsystemBase {
       double thetaStdDev = VisionConstants.BASE_THETA_STD_DEV / tagCount; // Rotation trust
 
       // Trust the measurement less when tags are far away
-      double avgDistDev = Math.pow(avgTagDistance,2);
-      xyStdDev = xyStdDev * avgDistDev;
-      thetaStdDev = thetaStdDev * avgDistDev;
+      double avgDistDev = Math.pow(avgTagDistance, 2);
+      xyStdDev = MathUtil.clamp(xyStdDev * avgDistDev,
+          VisionConstants.MIN_XY_STD_DEV, VisionConstants.MAX_XY_STD_DEV);
+      thetaStdDev = MathUtil.clamp(thetaStdDev * avgDistDev,
+          VisionConstants.MIN_THETA_STD_DEV, VisionConstants.MAX_THETA_STD_DEV);
 
       // Give the measurement to the drivetrain along with trust levels
       drivetrain.addVisionMeasurement(
@@ -234,10 +239,11 @@ public class LimelightSubsystem extends SubsystemBase {
 
     LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
 
-    // Always log when a target is visible (useful data, not spammy)
-    DataLogManager.log(String.format(
-        "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
-        tagCount, tx, ty, ta, avgTagDistance, ambiguity));
+    if (shouldLog) {
+      DataLogManager.log(String.format(
+          "[Limelight] Tags=%d TX=%.1f TY=%.1f TA=%.2f AvgDist=%.2fm Ambiguity=%.3f",
+          tagCount, tx, ty, ta, avgTagDistance, ambiguity));
+    }
 
     for (int i = 0; i < fiducials.length; i++) {
       LimelightHelpers.RawFiducial f = fiducials[i];
@@ -251,9 +257,11 @@ public class LimelightSubsystem extends SubsystemBase {
       SmartDashboard.putNumber(prefix + "/DistToRobot", f.distToRobot);
       SmartDashboard.putNumber(prefix + "/Ambiguity", f.ambiguity);
 
-      DataLogManager.log(String.format(
-          "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f",
-          i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity));
+      if (shouldLog) {
+        DataLogManager.log(String.format(
+            "[Limelight]   Tag%d: ID=%d TXNC=%.1f TYNC=%.1f Area=%.2f DistCam=%.2fm DistRobot=%.2fm Amb=%.3f",
+            i, f.id, f.txnc, f.tync, f.ta, f.distToCamera, f.distToRobot, f.ambiguity));
+      }
     }
   }
 
@@ -329,7 +337,7 @@ public class LimelightSubsystem extends SubsystemBase {
    * centered in the camera frame. Returns empty if none of the specified tags are visible.
    */
   public OptionalDouble getTXForTags(int[] tagIds) {
-    LimelightHelpers.RawFiducial[] fiducials = LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
     double bestTX = Double.NaN;
     double bestAbsTX = Double.MAX_VALUE;
     for (LimelightHelpers.RawFiducial f : fiducials) {
@@ -345,8 +353,7 @@ public class LimelightSubsystem extends SubsystemBase {
 
   /** Returns the distance to the nearest visible tag in meters, or -1 if none visible. */
   public double getNearestTagDistance() {
-    LimelightHelpers.RawFiducial[] fiducials =
-        LimelightHelpers.getRawFiducials(limelightName);
+    LimelightHelpers.RawFiducial[] fiducials = rawFiducialsCache;
     if (fiducials.length == 0) {
       return -1.0;
     }
