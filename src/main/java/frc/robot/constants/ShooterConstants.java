@@ -38,7 +38,7 @@ public final class ShooterConstants {
    * Fixed shooting speed in rotations per second.
    * TODO: Tune this on the real robot — start low and increase until balls reach target.
    */
-  public static final double SHOOTER_SPEED_RPS = 35.0;
+  public static final double SHOOTER_SPEED_RPS = 6000.0;
 
   // ==================== Feeder Speed ====================
 
@@ -46,7 +46,7 @@ public final class ShooterConstants {
    * Feeder motor duty cycle (0.0 = stopped, 1.0 = full speed).
    * TODO: Tune this on the real robot — feeder should move slower than shooter.
    */
-  public static final double FEEDER_SPEED_PERCENT = 0.2;
+  public static final double FEEDER_SPEED_PERCENT = 0.75;
 
   // ==================== Area-Based Shooting ====================
   // Maps Limelight target area (getTA(), 0-100 scale) to shooter speed (RPS).
@@ -112,7 +112,7 @@ public final class ShooterConstants {
   // ==================== Motion Magic Limits ====================
 
   /** Maximum shooter speed (RPS) — acts as a safety ceiling */
-  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 60.0;
+  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 240.0;
 
   /** How fast the shooter can spin up (RPS per second) */
   public static final double MOTION_MAGIC_ACCELERATION = 1000.0;

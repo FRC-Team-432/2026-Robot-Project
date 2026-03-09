@@ -7,6 +7,7 @@ package frc.robot.subsystems.shooter;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -38,6 +39,7 @@ public class Feeder extends SubsystemBase {
 
   public Feeder() {
     TalonFXConfiguration config = new TalonFXConfiguration();
+    config.MotorOutput.Inverted = InvertedValue. Clockwise_Positive;
 
     // Brake mode: holds ball position when the feeder stops so balls don't drift back
     config.MotorOutput.NeutralMode = NeutralModeValue.Brake;

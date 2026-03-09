@@ -81,6 +81,7 @@ public class Shooter extends SubsystemBase {
     config.Slot0.kP = ShooterConstants.kP;
     config.MotionMagic.MotionMagicCruiseVelocity = ShooterConstants.MOTION_MAGIC_CRUISE_VELOCITY;
     config.MotionMagic.MotionMagicAcceleration = ShooterConstants.MOTION_MAGIC_ACCELERATION;
+    config.MotorOutput.Inverted = InvertedValue. Clockwise_Positive;
 
     if (TalonFXUtil.applyConfigWithRetries(leader, config, 2)) {
       Robot.telemetry().log("Shooter/LeaderConfig", true);
