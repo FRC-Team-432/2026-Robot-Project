@@ -7,11 +7,13 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.Debouncer;
 import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.constants.VisionConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.vision.LimelightSubsystem;
+import java.util.OptionalDouble;
 
 /**
  * Pre-built driving commands for autonomous mode.
@@ -73,15 +75,21 @@ public class AutoCommands {
                 .until(() -> pathRequest.isFinished()))
         .withName("DriveTo");
   }
-  
+
   /**
    * Reset the robot's starting position.
+   *
+   * <p>Bug 4 fix: flushes swerve state with an Idle request before resetting pose,
+   * preventing stale rotation rates from a previous run from persisting.
    *
    * @param pose Where the robot should think it is (x, y, rotation)
    * @return Command that resets the position
    */
   public Command resetPose(Pose2d pose) {
-    return drivetrain.runOnce(() -> drivetrain.resetPose(pose));
+    return drivetrain.runOnce(() -> {
+      drivetrain.setControl(new SwerveRequest.Idle());
+      drivetrain.resetPose(pose);
+    });
   }
 
   // ==================== Drive with Parallel Actions ====================
@@ -149,6 +157,9 @@ public class AutoCommands {
    * Drive backward (robot-relative, -X) until any of the specified tags is visible.
    * Stops driving when a tag is found OR when timeout expires.
    *
+   * <p>Bug 4 fix: explicitly zeros RotationalRate and VelocityY on every loop cycle,
+   * preventing stale values from a previous Phase 2 from causing an arc.
+   *
    * @param limelight Vision subsystem to check for tags
    * @param tagIds Array of AprilTag IDs to look for
    * @param speedMps Backward driving speed in m/s (positive value, will be negated)
@@ -156,7 +167,8 @@ public class AutoCommands {
    */
   public Command driveBackwardUntilTag(LimelightSubsystem limelight, int[] tagIds,
       double speedMps, double timeoutSeconds) {
-    return drivetrain.applyRequest(() -> robotCentric.withVelocityX(-speedMps))
+    return drivetrain.applyRequest(() ->
+            robotCentric.withVelocityX(-speedMps).withRotationalRate(0.0).withVelocityY(0.0))
         .until(() -> limelight.hasSpecificTag(tagIds))
         .withTimeout(timeoutSeconds)
         .withName("DriveBackwardUntilTag");
@@ -165,12 +177,17 @@ public class AutoCommands {
   /**
    * Rotate in place to center on a specific hub tag.
    *
-   * Three-way logic each loop cycle:
-   *   a) Center tag is primary target -> P-control on TX with camera offset correction
-   *   b) A different tag is primary (side tag) -> spin toward it using TX sign
-   *   c) No tag visible -> slow fallback spin
+   * <p>Uses getTXForTags (rawFiducialsCache) instead of getTargetId/getTargetTX to avoid
+   * Limelight tracker lag between Phase 1 and Phase 2 (Bug 2 fix).
    *
-   * Exits when the center tag is centered within 3 degrees for 0.05 seconds (Debouncer).
+   * <p>Two-way logic each loop cycle:
+   *   a) Center tag visible via rawFiducialsCache -> EMA-filtered P-control on TX
+   *      with dynamic camera offset correction and 1° deadband
+   *   b) Center tag not visible -> brake-hold for 5 cycles on last filteredTX,
+   *      then fallback spin toward last known TX direction
+   *
+   * <p>Exits when the center tag's filtered TX is within 3° of the dynamic offset
+   * for 0.1 seconds (Debouncer).
    *
    * @param limelight Vision subsystem
    * @param centerTagId The center hub tag ID to align to (26 blue, 10 red)
@@ -178,30 +195,105 @@ public class AutoCommands {
    */
   public Command alignToHubTag(LimelightSubsystem limelight, int centerTagId,
       double timeoutSeconds) {
-    Debouncer centeredDebouncer = new Debouncer(0.05, DebounceType.kRising);
+    // Bug 3: increased debouncer from 0.05s to 0.1s for genuine settling
+    Debouncer centeredDebouncer = new Debouncer(0.1, DebounceType.kRising);
+
+    // Mutable state containers for use inside lambdas
+    double[] filteredTXHolder = {0.0};
+    boolean[] hadTagHolder = {false};
+    int[] brakeHoldHolder = {0};
+    double[] lastSeenTXHolder = {Double.NaN};
+    int[] centerTagIds = {centerTagId};
+
     return drivetrain.applyRequest(() -> {
           double rotRate;
-          int primaryId = limelight.getTargetId();
-          if (primaryId == centerTagId) {
-            // Center tag is primary — P-control to align robot center on it
-            double error = limelight.getTargetTX() - VisionConstants.CAMERA_TX_OFFSET_DEG;
-            rotRate = MathUtil.clamp(
-                -error * VisionConstants.DRIVE_TO_TAG_TURN_KP,
-                -VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S,
-                VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S);
-          } else if (primaryId != 0) {
-            // Side tag visible — spin toward it; the center tag is just past it.
-            double tx = limelight.getTargetTX();
-            rotRate = (tx > 0) ? -0.3 : 0.3;
+          OptionalDouble txOpt = limelight.getTXForTags(centerTagIds);
+
+          // Bonus: compute dynamic camera TX offset based on distance
+          double distMeters = limelight.getNearestTagDistance();
+          double dynamicOffset = (distMeters > 0.1)
+              ? -Math.toDegrees(Math.atan(0.241 / distMeters))
+              : VisionConstants.CAMERA_TX_OFFSET_DEG;
+
+          if (txOpt.isPresent()) {
+            double rawTX = txOpt.getAsDouble();
+            lastSeenTXHolder[0] = rawTX;
+
+            // Bug 3: EMA filter — seed on first detection, smooth thereafter
+            if (!hadTagHolder[0]) {
+              filteredTXHolder[0] = rawTX;
+            } else {
+              filteredTXHolder[0] =
+                  VisionConstants.FACE_TAG_TX_FILTER_ALPHA * rawTX
+                      + (1.0 - VisionConstants.FACE_TAG_TX_FILTER_ALPHA) * filteredTXHolder[0];
+            }
+            hadTagHolder[0] = true;
+            brakeHoldHolder[0] = VisionConstants.FACE_TAG_BRAKE_HOLD_CYCLES;
+
+            double error = filteredTXHolder[0] - dynamicOffset;
+
+            // Bug 3: deadband — stop micro-corrections when close enough
+            if (Math.abs(error) < VisionConstants.DRIVE_TO_TAG_TX_TOLERANCE_DEG) {
+              rotRate = 0.0;
+            } else {
+              rotRate = MathUtil.clamp(
+                  -error * VisionConstants.DRIVE_TO_TAG_TURN_KP,
+                  -VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S,
+                  VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S);
+            }
+
+            SmartDashboard.putNumber("AlignHub/RawTX", rawTX);
+            SmartDashboard.putNumber("AlignHub/FilteredTX", filteredTXHolder[0]);
+            SmartDashboard.putNumber("AlignHub/RotRate", rotRate);
+            SmartDashboard.putNumber("AlignHub/DynamicOffset", dynamicOffset);
+            SmartDashboard.putString("AlignHub/Status", "TRACKING");
+
+          } else if (brakeHoldHolder[0] > 0) {
+            // Bug 3: brake hold — continue correction on last filteredTX for 5 cycles
+            brakeHoldHolder[0]--;
+            hadTagHolder[0] = false;
+
+            double error = filteredTXHolder[0] - dynamicOffset;
+            if (Math.abs(error) < VisionConstants.DRIVE_TO_TAG_TX_TOLERANCE_DEG) {
+              rotRate = 0.0;
+            } else {
+              rotRate = MathUtil.clamp(
+                  -error * VisionConstants.DRIVE_TO_TAG_TURN_KP,
+                  -VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S,
+                  VisionConstants.DRIVE_TO_TAG_MAX_ROTATION_RAD_S);
+            }
+
+            SmartDashboard.putNumber("AlignHub/RotRate", rotRate);
+            SmartDashboard.putString("AlignHub/Status", "BRAKING");
+
           } else {
-            // No tag visible — slow fallback spin
-            rotRate = 0.3;
+            // Bug 2: fallback spin — direction based on last seen TX, not hardcoded
+            hadTagHolder[0] = false;
+            if (!Double.isNaN(lastSeenTXHolder[0])) {
+              double lastError = lastSeenTXHolder[0] - VisionConstants.CAMERA_TX_OFFSET_DEG;
+              rotRate = (lastError > 0) ? -0.3 : 0.3;
+            } else {
+              rotRate = 0.3 * VisionConstants.DRIVE_TO_TAG_SEARCH_DIRECTION;
+            }
+
+            SmartDashboard.putNumber("AlignHub/RotRate", rotRate);
+            SmartDashboard.putString("AlignHub/Status", "SEARCHING");
           }
           return robotCentric.withVelocityX(0.0).withRotationalRate(rotRate);
         })
-        .until(() -> centeredDebouncer.calculate(
-            limelight.getTargetId() == centerTagId
-                && Math.abs(limelight.getTargetTX() - VisionConstants.CAMERA_TX_OFFSET_DEG) <= 3.0))
+        .until(() -> {
+          OptionalDouble txCheck = limelight.getTXForTags(centerTagIds);
+          if (txCheck.isEmpty()) {
+            centeredDebouncer.calculate(false);
+            return false;
+          }
+          double distMeters = limelight.getNearestTagDistance();
+          double dynamicOffset = (distMeters > 0.1)
+              ? -Math.toDegrees(Math.atan(0.241 / distMeters))
+              : VisionConstants.CAMERA_TX_OFFSET_DEG;
+          return centeredDebouncer.calculate(
+              Math.abs(filteredTXHolder[0] - dynamicOffset) <= 3.0);
+        })
         .withTimeout(timeoutSeconds)
         .withName("AlignToHubTag");
   }
