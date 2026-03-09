@@ -157,22 +157,29 @@ public class AutoCommands {
 
   /**
    * Drive backward (robot-relative, -X) until any of the specified tags is visible.
-   * Stops driving when a tag is found OR when timeout expires.
+   * Ignores tags for the first {@code minDriveSeconds} to avoid false-positive exits
+   * from nearby side tags. Stops when a tag is found OR when timeout expires.
    *
-   * <p>Bug 4 fix: explicitly zeros RotationalRate and VelocityY on every loop cycle,
+   * <p>Explicitly zeros RotationalRate and VelocityY on every loop cycle,
    * preventing stale values from a previous Phase 2 from causing an arc.
    *
    * @param limelight Vision subsystem to check for tags
    * @param tagIds Array of AprilTag IDs to look for
    * @param speedMps Backward driving speed in m/s (positive value, will be negated)
-   * @param timeoutSeconds Maximum time to drive before giving up
+   * @param minDriveSeconds Minimum time to drive before checking for tags
+   * @param timeoutSeconds Maximum total time to drive before giving up
    */
   public Command driveBackwardUntilTag(LimelightSubsystem limelight, int[] tagIds,
-      double speedMps, double timeoutSeconds) {
+      double speedMps, double minDriveSeconds, double timeoutSeconds) {
+    // Drive blindly for minDriveSeconds, then check for tags
     return drivetrain.applyRequest(() ->
             robotCentric.withVelocityX(-speedMps).withRotationalRate(0.0).withVelocityY(0.0))
-        .until(() -> limelight.hasSpecificTag(tagIds))
-        .withTimeout(timeoutSeconds)
+        .withTimeout(minDriveSeconds)
+        .andThen(
+            drivetrain.applyRequest(() ->
+                    robotCentric.withVelocityX(-speedMps).withRotationalRate(0.0).withVelocityY(0.0))
+                .until(() -> limelight.hasSpecificTag(tagIds))
+                .withTimeout(timeoutSeconds - minDriveSeconds))
         .withName("DriveBackwardUntilTag");
   }
 
