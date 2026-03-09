@@ -57,6 +57,11 @@ public class LinearPathRequest implements SwerveRequest {
     // Initialize setpoint to current state
     setpoint = path.calculate(elapsedTime, initialState, TargetPose);
     lastSetpointSpeeds = setpoint.speeds;
+
+    // Clear accumulated PID error from previous runs
+    XController.reset();
+    YController.reset();
+    ThetaController.reset();
   }
 
   @Override
