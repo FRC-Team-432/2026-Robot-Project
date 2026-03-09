@@ -55,8 +55,8 @@ public class AutoRoutines {
           autoCommands.resetPose(startPose),
           autoCommands.log("AUTO: Phase 1 — driving backward until tag visible"),
 
-          // Phase 1: Drive backward until CENTER hub tag visible (Bug 1 fix)
-          autoCommands.driveBackwardUntilTag(limelight, new int[]{centerTagId}, 0.5, 6.0),
+          // Phase 1: Drive backward — ignore tags for 1.5 s then stop on any hub tag
+          autoCommands.driveBackwardUntilTag(limelight, hubTagIds, 0.5, 1.5, 6.0),
           autoCommands.log("AUTO: Phase 2 — aligning to hub center tag"),
 
           // Phase 2: Rotate to center on hub tag
