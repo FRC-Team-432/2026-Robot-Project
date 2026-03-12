@@ -16,7 +16,10 @@ public final class IntakeConstants {
   /** Duty cycle output (0.0–1.0) for ejecting (left bumper held). Applied as negative. */
   public static final double EJECT_SPEED = 0.5;
 
-  /** Stator current threshold (amps) above which the intake shuts off immediately. */
+  /** Hardware stator current limit (amps). Motor controller caps current at this value. */
+  public static final double STATOR_CURRENT_LIMIT_AMPS = 60.0;
+
+  /** Software stator current threshold (amps) above which the intake command stops (jam detection). */
   public static final double CURRENT_LIMIT_AMPS = 40.0;
 
   private IntakeConstants() {

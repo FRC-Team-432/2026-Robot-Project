@@ -34,6 +34,10 @@ public class Intake extends SubsystemBase {
     // Brake mode: stops quickly when command ends so game pieces don't slip out
     config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
 
+    // Hardware current limit — motor controller enforces this regardless of software
+    config.CurrentLimits.StatorCurrentLimitEnable = true;
+    config.CurrentLimits.StatorCurrentLimit = IntakeConstants.STATOR_CURRENT_LIMIT_AMPS;
+
     if (TalonFXUtil.applyConfigWithRetries(motor, config, 2)) {
       Robot.telemetry().log("Intake/Config", true);
     } else {
@@ -46,9 +50,8 @@ public class Intake extends SubsystemBase {
     return runEnd(
             () -> {
               statorCurrent.refresh();
-              currentAmps = statorCurrent.getValueAsDouble();
 
-              if (currentAmps >= IntakeConstants.CURRENT_LIMIT_AMPS) {
+              if (statorCurrent.getValueAsDouble() >= IntakeConstants.CURRENT_LIMIT_AMPS) {
                 isStalled = true;
                 motor.stopMotor();
               } else if (!isStalled) {
