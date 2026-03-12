@@ -9,6 +9,7 @@ import frc.robot.constants.VisionConstants;
 import frc.robot.constants.Waypoints;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Superstructure;
+import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.vision.LimelightSubsystem;
 import java.util.Set;
 
@@ -19,16 +20,19 @@ public class AutoRoutines {
   private final Superstructure superstructure;
   private final CommandSwerveDrivetrain drivetrain;
   private final LimelightSubsystem limelight;
+  private final Intake intake;
 
   public AutoRoutines(
       AutoCommands autoCommands,
       Superstructure superstructure,
       CommandSwerveDrivetrain drivetrain,
-      LimelightSubsystem limelight) {
+      LimelightSubsystem limelight,
+      Intake intake) {
     this.autoCommands = autoCommands;
     this.superstructure = superstructure;
     this.drivetrain = drivetrain;
     this.limelight = limelight;
+    this.intake = intake;
   }
 
   // ============================================================
@@ -56,14 +60,12 @@ public class AutoRoutines {
 
           // Phase 2: Rotate to center on hub tag
           autoCommands.alignToHubTag(limelight, centerTagId, 5.0),
-          autoCommands.log("AUTO: Phase 3 - spinning up shooter"),
+          autoCommands.log("AUTO: Phase 3 - shooting (distance-based speed)"),
 
-          // Phase 3: Spin up shooter at area-based speed, wait until ready
-          superstructure.spinUpForAreaAndWaitCommand(limelight::getTargetArea).withTimeout(3.0),
-          autoCommands.log("AUTO: Phase 4 - shooting"),
-
-          // Phase 4: Fire and stow
-          superstructure.shootCommand(),
+          // Phase 3: Spin up + feed + intake in parallel (intake pushes jammed balls)
+          Commands.parallel(
+              superstructure.autoShootByDistanceCommand(limelight::getAvgTagDistance),
+              intake.intake()),
           superstructure.stowCommand(),
           autoCommands.log("AUTO: Complete")
       );

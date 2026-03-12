@@ -69,7 +69,8 @@ public class RobotContainer {
           .withDriveRequestType(DriveRequestType.Velocity)
           .withSteerRequestType(SteerRequestType.MotionMagicExpo);
 
-  private final CommandXboxController joystick = new CommandXboxController(0);
+  private final CommandXboxController driver = new CommandXboxController(0);
+  private final CommandXboxController operator = new CommandXboxController(1);
 
   public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
 
@@ -132,7 +133,7 @@ public class RobotContainer {
             .andThen(superstructure.stowCommand()));
 
     autoChooser = new SendableChooser<>();
-    autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight);
+    autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight, intake);
 
     // ---- Vision Autos (primary) ----
     // Alliance is read at enable time — robot backs up until it sees the hub AprilTag,
@@ -167,51 +168,59 @@ public class RobotContainer {
   }
 
   private void configureBindings() {
-    // ==================== Drive ====================
+    // ==================== Driver Controller (Port 0) ====================
+
+    // Drive — field-centric swerve
     drivetrain.setDefaultCommand(
         drivetrain.applyRequest(
             () -> {
-              Vector<N2> scaledInputs = rescaleTranslation(joystick.getLeftY(), joystick.getLeftX());
+              Vector<N2> scaledInputs = rescaleTranslation(driver.getLeftY(), driver.getLeftX());
               return drive
                   .withVelocityX(-scaledInputs.get(0, 0) * MaxSpeed)
                   .withVelocityY(-scaledInputs.get(1, 0) * MaxSpeed)
-                  .withRotationalRate(-rescaleRotation(joystick.getRightX()) * MaxAngularRate);
+                  .withRotationalRate(-rescaleRotation(driver.getRightX()) * MaxAngularRate);
             }));
 
     // Reset field-centric heading
-    joystick
+    driver
         .start()
         .onTrue(
             drivetrain.runOnce(
                 () -> drivetrain.resetPose(new Pose2d(Feet.of(0), Feet.of(0), Rotation2d.kZero))));
 
-    // ==================== Climb ====================
-    // Y — hold to climb up. Motor brakes and holds position on release.
-    joystick.y().whileTrue(climb.climbUpCommand());
-
-    // A — hold to climb down. Motor brakes and holds position on release.
-    joystick.a().whileTrue(climb.climbDownCommand());
-
-    // ==================== Shooter ====================
-    // Right trigger - shoot with area-based speed adjustment
-    joystick.rightTrigger(0.1).whileTrue(superstructure.teleOpShootWithAreaCommand(limelight::getTargetArea));
-
-    // ==================== Intake ====================
-    // Left trigger — hold to intake. Left bumper — hold to eject.
-    joystick.leftTrigger().whileTrue(intake.intake());
-    joystick.leftBumper().whileTrue(intake.eject());
-
-    // ==================== Vision ====================
     // Right bumper — face the hub AprilTag (searches clockwise if not in view)
-    joystick.rightBumper().whileTrue(new FaceTagCommand(drivetrain, limelight, -1.0));
+    driver.rightBumper().whileTrue(new FaceTagCommand(drivetrain, limelight, -1.0));
 
     // X — drive normally while keeping rotation locked on hub tag
-    joystick.x().whileTrue(new DriveAndLockCommand(
+    driver.x().whileTrue(new DriveAndLockCommand(
         drivetrain,
         limelight,
-        () -> -rescaleTranslation(joystick.getLeftY(), joystick.getLeftX()).get(0, 0) * MaxSpeed,
-        () -> -rescaleTranslation(joystick.getLeftY(), joystick.getLeftX()).get(1, 0) * MaxSpeed
+        () -> -rescaleTranslation(driver.getLeftY(), driver.getLeftX()).get(0, 0) * MaxSpeed,
+        () -> -rescaleTranslation(driver.getLeftY(), driver.getLeftX()).get(1, 0) * MaxSpeed
     ));
+
+    // ==================== Operator Controller (Port 1) ====================
+
+    // Shooter — right trigger: speed from limelight distance to AprilTag + intake to push balls
+    operator.rightTrigger(0.1).whileTrue(
+        Commands.parallel(
+            superstructure.teleOpShootWithDistanceCommand(limelight::getAvgTagDistance),
+            intake.intake()));
+
+    // Climb — Y to climb up, A to climb down (hold; brakes on release)
+    operator.y().whileTrue(climb.climbUpCommand());
+    operator.a().whileTrue(climb.climbDownCommand());
+
+    // Reverse — right bumper reverses shooter + feeder to unclog
+    operator.rightBumper().whileTrue(superstructure.reverseCommand());
+
+    // Intake — left trigger to intake, left bumper to eject
+    operator.leftTrigger().whileTrue(intake.intake());
+    operator.leftBumper().whileTrue(intake.eject());
+
+    // D-pad — feeder only (independent of shooter)
+    operator.povUp().whileTrue(feeder.feedWhileHeld());       // Feed forward
+    operator.povDown().whileTrue(feeder.reverseFeedWhileHeld()); // Feed reverse
   }
 
   public Command getAutonomousCommand() {

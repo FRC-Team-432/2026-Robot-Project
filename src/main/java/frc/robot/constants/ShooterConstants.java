@@ -38,7 +38,7 @@ public final class ShooterConstants {
    * Fixed shooting speed in rotations per second.
    * TODO: Tune this on the real robot — start low and increase until balls reach target.
    */
-  public static final double SHOOTER_SPEED_RPS = 6000.0;
+  public static final double SHOOTER_SPEED_RPS = 100.0;
 
   // ==================== Feeder Speed ====================
 
@@ -61,32 +61,81 @@ public final class ShooterConstants {
   //   5. Repeat at 3-4 different distances
   //
   // These are PLACEHOLDER values - you MUST tune them on the real robot.
-  public static final double[][] AREA_SPEED_MAP = {
-    // { tagAreaPercent, shooterSpeedRPS }
-    {0.0,  45.0},  // No/tiny target - anchor at max speed so interpolation is monotonically decreasing
-    {0.5,  45.0},  // Very far away - high speed
-    {1.0,  40.0},  // Far
-    {2.0,  35.0},  // Medium-far
-    {5.0,  28.0},  // Medium
-    {10.0, 22.0},  // Close
-    {15.0, 18.0},  // Very close - low speed
-  };
+  // public static final double[][] AREA_SPEED_MAP = {
+  //   // { tagAreaPercent, shooterSpeedRPS }
+  //   {0.0,  100.0}, // No/tiny target - anchor at max speed so interpolation is monotonically decreasing
+  //   {0.5,  100.0}, // Very far away - max speed
+  //   {1.0,  90.0},  // Far
+  //   {2.0,  80.0},  // Medium-far
+  //   {5.0,  70.0},  // Medium
+  //   {10.0, 60.0},  // Close
+  //   {15.0, 50.0},  // Very close
+  // };
 
   // Speed when no tag is visible (safe medium value)
-  public static final double FALLBACK_SPEED_RPS = 35.0;
+  public static final double FALLBACK_SPEED_RPS = 80.0;
+
+  // ==================== Distance-Based Shooting ====================
+  // Maps Limelight avgTagDistance (meters) to shooter speed (RPS).
+  // CLOSER = SLOWER, FARTHER = FASTER.
+  // Auto uses lower speeds (robot is stationary + aimed).
+  // Teleop uses higher speeds (robot is moving, less precise aim).
+  //
+  // NOTE: With kV=0.125, the motor saturates at ~96 RPS (12V / 0.125).
+  // VALID RANGE: 15 - 85 RPS (above ~85 you're near saturation)
+
+  // --- AUTO (robot stopped, aimed) ---
+  public static final double[][] AUTO_DISTANCE_SPEED_MAP = {
+    // { distanceMeters, shooterSpeedRPS }
+    {0.5,  46.0},   // Very close
+    {1.0,  49.0},   // Close
+    {1.5,  52.0},   // Medium-close
+    {2.0,  55.0},   // Medium
+    {2.5,  58.0},   // Medium-far
+    {3.0,  61.0},   // Far
+    {4.0,  64.0},   // Very far
+    {5.0,  67.0},   // Max range
+  };
+
+  // --- TELEOP (robot moving, need extra speed) ---
+  public static final double[][] TELEOP_DISTANCE_SPEED_MAP = {
+    // { distanceMeters, shooterSpeedRPS }
+    {0.5,  45.0},   // Very close
+    {1.0,  49.0},   // Close
+    {1.5,  53.0},   // Medium-close
+    {2.0,  57.0},   // Medium
+    {2.5,  61.0},   // Medium-far
+    {3.0,  65.0},   // Far
+    {4.0,  69.0},   // Very far
+    {5.0,  73.0},   // Max range
+  };
+
+  // Fallback speeds when no tag is visible
+  public static final double AUTO_FALLBACK_SPEED_RPS = 52.0;
+  public static final double TELEOP_FALLBACK_SPEED_RPS = 57.0;
 
   // Safety limits
-  public static final double MAX_SHOOTER_SPEED_RPS = 50.0;
+  public static final double MAX_SHOOTER_SPEED_RPS = 85.0;
   public static final double MIN_SHOOTER_SPEED_RPS = 15.0;
 
-  // ==================== Auto Fire Duration ====================
+  // Delay (seconds) before the feeder starts after the shooter begins spinning.
+  // Gives the wheels time to spin up so balls don't stall.
+  public static final double FEEDER_DELAY_SECONDS = 1.5;
 
+  // Reverse speed for unclogging (RPS, applied as negative internally)
+  public static final double REVERSE_SPEED_RPS = 20.0;
+
+  // Reverse feeder duty cycle for unclogging
+  public static final double FEEDER_REVERSE_PERCENT = -0.5;
+
+  // ==================== Auto Fire Duration ====================
+ 
   /**
    * How long (seconds) the feeder runs during the auto shootCommand().
    * Too short = ball doesn't fully exit. Too long = wasted time in auto.
    * TODO: Tune after testing — 0.5 s is a starting estimate.
    */
-  public static final double SHOOT_DURATION_SECONDS = 0.5;
+  public static final double SHOOT_DURATION_SECONDS = 6.0;
 
   // ==================== Tolerances ====================
 
@@ -94,7 +143,7 @@ public final class ShooterConstants {
    * How close the shooter speed needs to be to count as "ready to shoot" (RPS).
    * Looser tolerance = faster ready time. Tighter = more accurate speed.
    */
-  public static final double VELOCITY_TOLERANCE_RPS = 1.0;
+  public static final double VELOCITY_TOLERANCE_RPS = 20.0;
 
   // ==================== PID / Feedforward Control Values ====================
   // These control how accurately the shooter holds its target speed.
@@ -112,7 +161,7 @@ public final class ShooterConstants {
   // ==================== Motion Magic Limits ====================
 
   /** Maximum shooter speed (RPS) — acts as a safety ceiling */
-  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 240.0;
+  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 6000.0;
 
   /** How fast the shooter can spin up (RPS per second) */
   public static final double MOTION_MAGIC_ACCELERATION = 1000.0;

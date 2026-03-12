@@ -97,6 +97,19 @@ public class Feeder extends SubsystemBase {
   }
 
   /**
+   * Reverse the feeder to push balls back out (unclog).
+   * Stops on command cancel.
+   *
+   * @return Command that reverses feeder while active, stops on cancel
+   */
+  public Command reverseFeedWhileHeld() {
+    return startEnd(
+            () -> motor.setControl(dutyCycleOut.withOutput(ShooterConstants.FEEDER_REVERSE_PERCENT)),
+            () -> stop())
+        .withName("FeederReverse");
+  }
+
+  /**
    * Stop the feeder once, then release the subsystem.
    *
    * @return Instant command that stops the feeder

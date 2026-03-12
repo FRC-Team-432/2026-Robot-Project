@@ -180,11 +180,10 @@ public final class VisionConstants {
    *   <li>0.0 → camera is exactly on the robot's centerline (no correction needed).
    * </ul>
    */
-  // Camera is ~9.5 in (0.241 m) to the RIGHT of robot center.
-  // At ~2 m shooting distance: -arctan(9.5/80) ≈ -6.8°.
+  // Camera is closer to robot center after mount adjustment.
   // TODO: tune by driving to a known position in front of a hub tag, aligning robot center
   //       perpendicular to the tag, then reading Limelight/TX from SmartDashboard.
-  public static final double CAMERA_TX_OFFSET_DEG = -6.5;
+  public static final double CAMERA_TX_OFFSET_DEG = -1.0;
 
   // ==================== Drive-and-Lock Tuning ====================
 

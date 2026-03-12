@@ -57,38 +57,69 @@ public class Superstructure extends SubsystemBase {
   }
 
   /**
-   * Same as {@link #teleOpShootCommand()} but shooter speed adjusts based on
-   * distance to target — closer = slower, farther = faster.
+   * Teleop: run shooter at a speed proportional to trigger pressure.
+   * The feeder waits a short delay before feeding to let the shooter spin up.
+   * Both stop when the command ends (trigger released).
    *
-   * @param distanceMeters Supplier for current distance to target (meters)
-   * @return Command that runs distance-adjusted shooter + feeder while active
+   * @param triggerSupplier Supplier for the trigger axis value (0.0–1.0)
    */
-  public Command teleOpShootWithDistanceCommand(DoubleSupplier distanceMeters) {
+  public Command teleOpShootWithTriggerCommand(DoubleSupplier triggerSupplier) {
     return Commands.parallel(
-            shooter.spinAtAreaWhileHeld(distanceMeters),
-            feeder.feedWhileHeld())
+            shooter.spinAtTriggerWhileHeld(triggerSupplier),
+            Commands.waitSeconds(ShooterConstants.FEEDER_DELAY_SECONDS)
+                .andThen(feeder.feedWhileHeld()))
+        .withName("TeleOpShootWithTrigger");
+  }
+
+  /**
+   * Teleop: run shooter at distance-based speed while the trigger is fully pressed.
+   * Speed is determined by limelight distance to AprilTag — closer = slower, farther = faster.
+   * Recalculates every loop cycle so speed adjusts live as the robot moves.
+   * Both stop when the command ends (trigger released).
+   *
+   * @param distanceSupplier Supplier for current distance to target (meters)
+   */
+  public Command teleOpShootWithDistanceCommand(DoubleSupplier distanceSupplier) {
+    return Commands.parallel(
+            shooter.spinAtTeleOpDistanceWhileHeld(distanceSupplier),
+            Commands.waitSeconds(ShooterConstants.FEEDER_DELAY_SECONDS)
+                .andThen(feeder.feedWhileHeld()))
         .withName("TeleOpShootWithDistance");
   }
 
   /**
-   * Teleop: run shooter at area-based speed + feeder simultaneously.
-   * Both stop when the command ends (trigger released).
+   * Reverse both shooter and feeder to unclog jammed balls.
+   * Hold to reverse, release to stop.
    */
-  public Command teleOpShootWithAreaCommand(DoubleSupplier areaSupplier) {
+  public Command reverseCommand() {
     return Commands.parallel(
-            shooter.spinAtAreaWhileHeld(areaSupplier),
-            feeder.feedWhileHeld())
-        .withName("TeleOpShootWithArea");
+            shooter.reverseWhileHeld(),
+            feeder.reverseFeedWhileHeld())
+        .withName("Reverse");
   }
 
   /**
-   * Auto: spin up shooter based on tag area, wait until at speed.
-   * Reads area once at the moment this command starts.
+   * Auto: spin up shooter based on tag distance (meters), wait until at speed.
+   * Closer = slower, farther = faster. Uses the DISTANCE_SPEED_MAP in ShooterConstants.
    */
-  public Command spinUpForAreaAndWaitCommand(DoubleSupplier areaSupplier) {
-    return shooter.spinUpForArea(areaSupplier)
+  public Command spinUpForDistanceAndWaitCommand(DoubleSupplier distanceSupplier) {
+    return shooter.spinUpForDistance(distanceSupplier)
         .andThen(Commands.waitUntil(() -> shooter.isAtTarget()))
-        .withName("SpinUpForAreaAndWait");
+        .withName("SpinUpForDistanceAndWait");
+  }
+
+  /**
+   * Auto: set shooter speed from distance, then immediately start feeding after
+   * a short delay. Runs for SHOOT_DURATION_SECONDS then stops everything.
+   * No waiting for full spin-up — the feeder starts almost right away.
+   */
+  public Command autoShootByDistanceCommand(DoubleSupplier distanceSupplier) {
+    return Commands.parallel(
+            shooter.spinAtAutoDistanceWhileHeld(distanceSupplier),
+            Commands.waitSeconds(ShooterConstants.FEEDER_DELAY_SECONDS)
+                .andThen(feeder.feedWhileHeld()))
+        .withTimeout(ShooterConstants.SHOOT_DURATION_SECONDS)
+        .withName("AutoShootByDistance");
   }
 
   // ==================== State Commands ====================

@@ -11,7 +11,9 @@ import edu.wpi.first.epilogue.logging.NTEpilogueBackend;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.wpilibj.DataLogManager;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
@@ -40,6 +42,7 @@ public class Robot extends TimedRobot {
 
   private final RobotContainer m_robotContainer;
   private final HootAutoReplay hootAutoReplay = new HootAutoReplay().withTimestampReplay().withJoystickReplay();
+  private final Timer autoTimer = new Timer();
 
   public Robot() {
     m_robotContainer = new RobotContainer();
@@ -74,6 +77,8 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousInit() {
+    autoTimer.restart();
+
     m_autonomousCommand = m_robotContainer.getAutonomousCommand();
 
     if (m_autonomousCommand != null) {
@@ -83,10 +88,12 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousPeriodic() {
+    SmartDashboard.putNumber("Auto/ElapsedTime", autoTimer.get());
   }
 
   @Override
   public void autonomousExit() {
+    autoTimer.stop();
   }
 
   @Override

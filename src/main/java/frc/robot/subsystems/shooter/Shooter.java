@@ -29,12 +29,12 @@ import java.util.function.DoubleSupplier;
  * The leader spins one direction; the follower spins the opposite
  * direction so both wheels grip and push the ball out the same side.
  *
- * <p>Three shooting modes are available:
+ * <p>Shooting modes available:
  * <ul>
  *   <li>{@link #spinWhileHeld()} — fixed speed, for teleop trigger binding
- *   <li>{@link #spinAtAreaWhileHeld(DoubleSupplier)} — speed adjusts automatically
- *       based on AprilTag area (closer = slower, farther = faster)
- *   <li>{@link #spinUpForArea(DoubleSupplier)} — instant area-based spinup for auto sequences
+ *   <li>{@link #spinAtDistanceWhileHeld(DoubleSupplier)} — speed adjusts continuously
+ *       based on AprilTag distance (closer = slower, farther = faster)
+ *   <li>{@link #spinUpForDistance(DoubleSupplier)} — instant distance-based spinup for auto sequences
  * </ul>
  *
  * <p>Both motors stop automatically when their command ends (trigger released or auto step done).
@@ -63,14 +63,29 @@ public class Shooter extends SubsystemBase {
   private final AngularVelocity tolerance =
       RotationsPerSecond.of(ShooterConstants.VELOCITY_TOLERANCE_RPS);
 
-  // Interpolation table: looks up the right speed for a given tag area
-  // Built once at startup from the AREA_SPEED_MAP in ShooterConstants
-  private final InterpolatingDoubleTreeMap areaSpeedMap = new InterpolatingDoubleTreeMap();
+  private double triggerValue = 0.0;
+  private double commandedSpeedRPS = 0.0;
+
+  // Last valid distance from Limelight — held so that brief tag loss (vibration, rotation)
+  // doesn't cause the shooter to jump to fallback speed mid-shot.
+  // Reset to 0.0 when the shooting command ends.
+  private double lastKnownDistance = 0.0;
+
+  // Throttle logging to ~5Hz (every 4 cycles at 20ms periodic) to avoid flooding RioLog
+  private int distanceLogCounter = 0;
+  private static final int DISTANCE_LOG_INTERVAL = 4;
+
+  // Interpolation tables: auto uses lower speeds (stationary), teleop uses higher (moving)
+  private final InterpolatingDoubleTreeMap autoDistanceSpeedMap = new InterpolatingDoubleTreeMap();
+  private final InterpolatingDoubleTreeMap teleOpDistanceSpeedMap = new InterpolatingDoubleTreeMap();
 
   public Shooter() {
-    // Build the area → speed lookup table from constants
-    for (double[] point : ShooterConstants.AREA_SPEED_MAP) {
-      areaSpeedMap.put(point[0], point[1]);
+    // Build the distance → speed lookup tables from constants
+    for (double[] point : ShooterConstants.AUTO_DISTANCE_SPEED_MAP) {
+      autoDistanceSpeedMap.put(point[0], point[1]);
+    }
+    for (double[] point : ShooterConstants.TELEOP_DISTANCE_SPEED_MAP) {
+      teleOpDistanceSpeedMap.put(point[0], point[1]);
     }
 
     // Configure the leader motor
@@ -150,53 +165,170 @@ public class Shooter extends SubsystemBase {
   }
 
   /**
-   * Spin the shooter at a speed based on the current AprilTag area.
-   * Larger area (closer) = slower. Smaller area (farther) = faster.
-   * Recalculates speed every loop cycle. Stops on command cancel.
+   * Spin the shooter at a speed proportional to how far the trigger is pressed.
+   * The full trigger range (0.0–1.0) maps smoothly to 0–SHOOTER_SPEED_RPS
+   * with no minimum floor, so every increment of the trigger gives a
+   * proportional increase in speed.
    *
-   * For teleop use with .whileTrue() binding.
+   * <p>Logs trigger value and commanded speed to the Driver Station console.
    *
-   * @param areaSupplier Supplier for current tag area (0-100 from getTA())
+   * @param triggerSupplier Supplier for trigger axis (0.0–1.0)
    */
-  public Command spinAtAreaWhileHeld(DoubleSupplier areaSupplier) {
+  public Command spinAtTriggerWhileHeld(DoubleSupplier triggerSupplier) {
     return run(() -> {
-            double area = areaSupplier.getAsDouble();
-            double speed;
-            if (area < 0.01) {
-                speed = ShooterConstants.FALLBACK_SPEED_RPS;
-            } else {
-                speed = areaSpeedMap.get(area);
-            }
-            speed = MathUtil.clamp(speed,
-                ShooterConstants.MIN_SHOOTER_SPEED_RPS,
-                ShooterConstants.MAX_SHOOTER_SPEED_RPS);
+            double trigger = MathUtil.clamp(triggerSupplier.getAsDouble(), 0.0, 1.0);
+            double speed = trigger * ShooterConstants.SHOOTER_SPEED_RPS;
+            speed = Math.min(speed, ShooterConstants.MAX_SHOOTER_SPEED_RPS);
+
+            triggerValue = trigger;
+            commandedSpeedRPS = speed;
+
+            System.out.println(
+                String.format("Shooter | trigger: %.0f%% | cmd: %.1f RPS | actual: %.1f RPS",
+                    trigger * 100, speed, getVelocity().in(RotationsPerSecond)));
+
             setVelocity(RotationsPerSecond.of(speed));
         })
-        .finallyDo(() -> stop())
-        .withName("ShooterSpinAtArea");
+        .finallyDo(() -> {
+            stop();
+            triggerValue = 0.0;
+            commandedSpeedRPS = 0.0;
+        })
+        .withName("ShooterSpinAtTrigger");
   }
 
   /**
-   * Set shooter speed based on current tag area, then release.
-   * The TalonFX holds speed on its own. For use in auto sequences.
+   * TELEOP: Spin the shooter using the teleop speed map (higher speeds for moving robot).
+   * Recalculates EVERY loop cycle (20ms). Holds last known distance on brief tag loss.
    *
-   * @param areaSupplier Supplier for current tag area (0-100 from getTA())
+   * @param distanceSupplier Supplier for current distance to target (meters)
    */
-  public Command spinUpForArea(DoubleSupplier areaSupplier) {
-    return runOnce(() -> {
-            double area = areaSupplier.getAsDouble();
+  public Command spinAtTeleOpDistanceWhileHeld(DoubleSupplier distanceSupplier) {
+    return run(() -> {
+            double distance = distanceSupplier.getAsDouble();
             double speed;
-            if (area < 0.01) {
-                speed = ShooterConstants.FALLBACK_SPEED_RPS;
+            String source;
+
+            if (distance > 0) {
+                lastKnownDistance = distance;
+                speed = teleOpDistanceSpeedMap.get(distance);
+                source = "LIVE";
+            } else if (lastKnownDistance > 0) {
+                distance = lastKnownDistance;
+                speed = teleOpDistanceSpeedMap.get(lastKnownDistance);
+                source = "HOLD";
             } else {
-                speed = areaSpeedMap.get(area);
+                speed = ShooterConstants.TELEOP_FALLBACK_SPEED_RPS;
+                source = "FALLBACK";
             }
+
             speed = MathUtil.clamp(speed,
                 ShooterConstants.MIN_SHOOTER_SPEED_RPS,
                 ShooterConstants.MAX_SHOOTER_SPEED_RPS);
+
+            commandedSpeedRPS = speed;
+
+            if (distanceLogCounter++ % DISTANCE_LOG_INTERVAL == 0) {
+                System.out.println(
+                    String.format("Shooter TELEOP [%s] | dist: %.2f m | cmd: %.1f RPS | actual: %.1f RPS",
+                        source, distance, speed, getVelocity().in(RotationsPerSecond)));
+            }
+
             setVelocity(RotationsPerSecond.of(speed));
         })
-        .withName("ShooterSpinUpForArea");
+        .finallyDo(() -> {
+            stop();
+            commandedSpeedRPS = 0.0;
+            lastKnownDistance = 0.0;
+            distanceLogCounter = 0;
+        })
+        .withName("ShooterTeleOpSpinAtDistance");
+  }
+
+  /**
+   * AUTO: Spin the shooter using the auto speed map (lower speeds for stationary robot).
+   * Recalculates EVERY loop cycle (20ms). Holds last known distance on brief tag loss.
+   *
+   * @param distanceSupplier Supplier for current distance to target (meters)
+   */
+  public Command spinAtAutoDistanceWhileHeld(DoubleSupplier distanceSupplier) {
+    return run(() -> {
+            double distance = distanceSupplier.getAsDouble();
+            double speed;
+            String source;
+
+            if (distance > 0) {
+                lastKnownDistance = distance;
+                speed = autoDistanceSpeedMap.get(distance);
+                source = "LIVE";
+            } else if (lastKnownDistance > 0) {
+                distance = lastKnownDistance;
+                speed = autoDistanceSpeedMap.get(lastKnownDistance);
+                source = "HOLD";
+            } else {
+                speed = ShooterConstants.AUTO_FALLBACK_SPEED_RPS;
+                source = "FALLBACK";
+            }
+
+            speed = MathUtil.clamp(speed,
+                ShooterConstants.MIN_SHOOTER_SPEED_RPS,
+                ShooterConstants.MAX_SHOOTER_SPEED_RPS);
+
+            commandedSpeedRPS = speed;
+
+            if (distanceLogCounter++ % DISTANCE_LOG_INTERVAL == 0) {
+                System.out.println(
+                    String.format("Shooter AUTO [%s] | dist: %.2f m | cmd: %.1f RPS | actual: %.1f RPS",
+                        source, distance, speed, getVelocity().in(RotationsPerSecond)));
+            }
+
+            setVelocity(RotationsPerSecond.of(speed));
+        })
+        .finallyDo(() -> {
+            stop();
+            commandedSpeedRPS = 0.0;
+            lastKnownDistance = 0.0;
+            distanceLogCounter = 0;
+        })
+        .withName("ShooterAutoSpinAtDistance");
+  }
+
+  /**
+   * AUTO: Set shooter speed based on current tag distance (instant, then release).
+   * The TalonFX holds speed on its own. Uses the auto speed map.
+   *
+   * @param distanceSupplier Supplier for current distance to target (meters)
+   */
+  public Command spinUpForDistance(DoubleSupplier distanceSupplier) {
+    return runOnce(() -> {
+            double distance = distanceSupplier.getAsDouble();
+            double speed;
+            String source;
+
+            if (distance > 0) {
+                lastKnownDistance = distance;
+                speed = autoDistanceSpeedMap.get(distance);
+                source = "LIVE";
+            } else if (lastKnownDistance > 0) {
+                distance = lastKnownDistance;
+                speed = autoDistanceSpeedMap.get(lastKnownDistance);
+                source = "HOLD";
+            } else {
+                speed = ShooterConstants.AUTO_FALLBACK_SPEED_RPS;
+                source = "FALLBACK";
+            }
+
+            speed = MathUtil.clamp(speed,
+                ShooterConstants.MIN_SHOOTER_SPEED_RPS,
+                ShooterConstants.MAX_SHOOTER_SPEED_RPS);
+
+            System.out.println(
+                String.format("Shooter Auto [%s] | dist: %.2f m | speed: %.1f RPS",
+                    source, distance, speed));
+
+            setVelocity(RotationsPerSecond.of(speed));
+        })
+        .withName("ShooterSpinUpForDistance");
   }
 
   /**
@@ -211,6 +343,18 @@ public class Shooter extends SubsystemBase {
   public Command spinUpOnce() {
     return runOnce(() -> setVelocity(RotationsPerSecond.of(ShooterConstants.SHOOTER_SPEED_RPS)))
         .withName("ShooterSpinUpOnce");
+  }
+
+  /**
+   * Reverse the shooter wheels to unclog jammed balls.
+   * Stops on command cancel.
+   *
+   * @return Command that reverses shooter while active, stops on cancel
+   */
+  public Command reverseWhileHeld() {
+    return run(() -> setVelocity(RotationsPerSecond.of(-ShooterConstants.REVERSE_SPEED_RPS)))
+        .finallyDo(() -> stop())
+        .withName("ShooterReverse");
   }
 
   /**
@@ -236,6 +380,11 @@ public class Shooter extends SubsystemBase {
   /** Current shooter speed (from the leader motor encoder). */
   public AngularVelocity getVelocity() {
     return leader.getVelocity().getValue();
+  }
+
+  /** Current shooter speed in RPS (convenience for threshold checks). */
+  public double getSpeedRPS() {
+    return getVelocity().in(RotationsPerSecond);
   }
 
   /** Target speed the shooter is trying to reach. */
