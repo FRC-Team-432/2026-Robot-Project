@@ -16,6 +16,8 @@ public final class IntakeConstants {
   /** Duty cycle output (0.0–1.0) for ejecting (left bumper held). Applied as negative. */
   public static final double EJECT_SPEED = 0.5;
 
+  /** Stator current threshold (amps) above which the intake shuts off immediately. */
+  public static final double CURRENT_LIMIT_AMPS = 40.0;
 
   private IntakeConstants() {
     throw new UnsupportedOperationException("This is a utility class!");
