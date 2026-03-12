@@ -4,11 +4,13 @@
 
 package frc.robot.subsystems.intake;
 
+import com.ctre.phoenix6.StatusSignal;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.units.measure.Current;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Robot;
@@ -22,6 +24,10 @@ public class Intake extends SubsystemBase {
   private final TalonFX motor = new TalonFX(IntakeConstants.INTAKE_CAN_ID, TunerConstants.kCANBus);
 
   private final DutyCycleOut dutyCycleOut = new DutyCycleOut(0);
+  private final StatusSignal<Current> statorCurrent = motor.getStatorCurrent();
+
+  @Logged private double currentAmps;
+  @Logged private boolean isStalled;
 
   public Intake() {
     TalonFXConfiguration config = new TalonFXConfiguration();
@@ -35,11 +41,24 @@ public class Intake extends SubsystemBase {
     }
   }
 
-  /** Spin the intake motor forward to collect a game piece. Runs until interrupted. */
+  /** Spin the intake motor forward to collect a game piece. Stops immediately if current hits 40A. */
   public Command intake() {
     return runEnd(
-            () -> motor.setControl(dutyCycleOut.withOutput(IntakeConstants.INTAKE_SPEED)),
-            motor::stopMotor)
+            () -> {
+              statorCurrent.refresh();
+              currentAmps = statorCurrent.getValueAsDouble();
+
+              if (currentAmps >= IntakeConstants.CURRENT_LIMIT_AMPS) {
+                isStalled = true;
+                motor.stopMotor();
+              } else if (!isStalled) {
+                motor.setControl(dutyCycleOut.withOutput(IntakeConstants.INTAKE_SPEED));
+              }
+            },
+            () -> {
+              motor.stopMotor();
+              isStalled = false;
+            })
         .withName("Intake");
   }
 
