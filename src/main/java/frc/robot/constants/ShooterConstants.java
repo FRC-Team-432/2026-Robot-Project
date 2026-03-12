@@ -104,10 +104,10 @@ public final class ShooterConstants {
     {1.0,  49.0},   // Close
     {1.5,  53.0},   // Medium-close
     {2.0,  57.0},   // Medium
-    {2.5,  61.0},   // Medium-far
-    {3.0,  65.0},   // Far
-    {4.0,  69.0},   // Very far
-    {5.0,  73.0},   // Max range
+    {2.5,  70.0},   // Medium-far
+    {3.0,  80.0},   // Far
+    {4.0,  90.0},   // Very far
+    {5.0,  100.0},   // Max range
   };
 
   // Fallback speeds when no tag is visible
