@@ -19,7 +19,7 @@ public final class AutoConstants {
   // ==================== Robot Physical Properties ====================
 
   /** Robot mass in pounds (used for wheel force calculations) */
-  public static final double ROBOT_MASS_LBS = 125.0;
+  public static final double ROBOT_MASS_LBS = 95.2;
 
   /** Robot moment of inertia in kg·m² (used for rotational dynamics). If you don't know leave at 6*/
   public static final double MOMENT_OF_INERTIA_KG_M2 = 6.0;

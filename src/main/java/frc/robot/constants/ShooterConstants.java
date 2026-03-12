@@ -120,7 +120,7 @@ public final class ShooterConstants {
 
   // Delay (seconds) before the feeder starts after the shooter begins spinning.
   // Gives the wheels time to spin up so balls don't stall.
-  public static final double FEEDER_DELAY_SECONDS = 1.5;
+  public static final double FEEDER_DELAY_SECONDS = 1.0;
 
   // Reverse speed for unclogging (RPS, applied as negative internally)
   public static final double REVERSE_SPEED_RPS = 20.0;
@@ -161,10 +161,10 @@ public final class ShooterConstants {
   // ==================== Motion Magic Limits ====================
 
   /** Maximum shooter speed (RPS) — acts as a safety ceiling */
-  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 6000.0;
+  public static final double MOTION_MAGIC_CRUISE_VELOCITY = 500.0;
 
   /** How fast the shooter can spin up (RPS per second) */
-  public static final double MOTION_MAGIC_ACCELERATION = 1000.0;
+  public static final double MOTION_MAGIC_ACCELERATION = 5000.0;
 
   private ShooterConstants() {
     throw new UnsupportedOperationException("This is a utility class!");
