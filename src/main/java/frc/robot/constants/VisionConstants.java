@@ -193,7 +193,7 @@ public final class VisionConstants {
    * track the AprilTag. Lower this if the tag is lost at speed; raise it carefully.
    */
   public static final double DRIVE_AND_LOCK_MAX_SPEED_MPS = 1.5;
-
+ 
   private VisionConstants() {
     throw new UnsupportedOperationException("This is a utility class!");
   }

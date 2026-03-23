@@ -135,15 +135,17 @@ public class RobotContainer {
     autoChooser = new SendableChooser<>();
     autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight, intake);
 
-    // ---- Vision Autos (primary) ----
-    // Alliance is read at enable time — robot backs up until it sees the hub AprilTag,
-    // locks on, then shoots. No pre-planned path needed.
-    autoChooser.setDefaultOption("Center Start", autoRoutines.centerStartAuto());
+    // ---- MVR Center Test ----
+    autoChooser.setDefaultOption("MVR Center", Commands.defer(
+        () -> AutoBuilder.buildAuto("MVR Center"),
+        Set.of(drivetrain)));
+
+    // ---- Vision Autos ----
+    autoChooser.addOption("Center Start", autoRoutines.centerStartAuto());
     autoChooser.addOption("Left Start", autoRoutines.leftStartAuto());
     autoChooser.addOption("Right Start", autoRoutines.rightStartAuto());
 
     // ---- PathPlanner Autos (backup) ----
-    // Pre-planned paths. Use these if vision auto is not working on the day.
     autoChooser.addOption("PathPlanner - Center", Commands.defer(
         () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue
             ? AutoBuilder.buildAuto("StartCenterAutoBlue")
