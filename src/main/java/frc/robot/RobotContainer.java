@@ -4,12 +4,25 @@
 
 package frc.robot;
 
-import static edu.wpi.first.units.Units.*;
+import static edu.wpi.first.units.Units.Feet;
+import static edu.wpi.first.units.Units.KilogramSquareMeters;
+import static edu.wpi.first.units.Units.MetersPerSecond;
+import static edu.wpi.first.units.Units.Pounds;
+import static edu.wpi.first.units.Units.RadiansPerSecond;
+import static edu.wpi.first.units.Units.RotationsPerSecond;
+
+import java.util.Set;
 
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveModule.SteerRequestType;
-import com.ctre.phoenix6.swerve.utility.WheelForceCalculator;
 import com.ctre.phoenix6.swerve.SwerveRequest;
+import com.ctre.phoenix6.swerve.utility.WheelForceCalculator;
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
+import com.pathplanner.lib.config.PIDConstants;
+import com.pathplanner.lib.config.RobotConfig;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
+
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
@@ -18,30 +31,26 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import com.pathplanner.lib.auto.AutoBuilder;
-import com.pathplanner.lib.auto.NamedCommands;
-import com.pathplanner.lib.config.PIDConstants;
-import com.pathplanner.lib.config.RobotConfig;
-import com.pathplanner.lib.controllers.PPHolonomicDriveController;
-import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.DriverStation.Alliance;
-import java.util.Set;
 import frc.robot.autonomous.AutoCommands;
 import frc.robot.autonomous.AutoRoutines;
 import frc.robot.autonomous.LinearPathRequest;
 import frc.robot.commands.DriveAndLockCommand;
 import frc.robot.commands.FaceTagCommand;
 import frc.robot.constants.AutoConstants;
+import frc.robot.constants.IntakeFoldConstants;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Superstructure;
 import frc.robot.subsystems.climb.Climb;
 import frc.robot.subsystems.intake.Intake;
+import frc.robot.subsystems.intake.IntakeFold;
 import frc.robot.subsystems.shooter.Feeder;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.vision.LimelightSubsystem;
@@ -89,6 +98,7 @@ public class RobotContainer {
   public final Shooter shooter = new Shooter();
   public final Feeder feeder = new Feeder();
   public final Intake intake = new Intake();
+  public final IntakeFold intakeFold = new IntakeFold();
 
   private final Superstructure superstructure = new Superstructure(shooter, feeder);
 
@@ -127,18 +137,39 @@ public class RobotContainer {
 
     // ==================== PathPlanner Named Commands ====================
     // These let PathPlanner trigger robot actions by name via Event Markers.
+    // In PathPlanner GUI: add an Event Marker on the path → pick the command name.
     NamedCommands.registerCommand("shoot",
         superstructure.speakerCloseAndWaitCommand()
             .andThen(superstructure.shootCommand())
             .andThen(superstructure.stowCommand()));
 
+    // Intake cycle: fold down → run intake → fold back up
+    NamedCommands.registerCommand("intakeCycle",
+        Commands.sequence(
+            intakeFold.deployCommand(),
+            intake.intake().withTimeout(IntakeFoldConstants.DEPLOY_TIME_SECONDS),
+            intakeFold.retractCommand()));
+
+    // Shoot then intake: full shoot sequence, then pick up next game piece
+    NamedCommands.registerCommand("shootThenIntake",
+        Commands.sequence(
+            superstructure.speakerCloseAndWaitCommand(),
+            superstructure.shootCommand(),
+            superstructure.stowCommand(),
+            intakeFold.deployCommand(),
+            intake.intake().withTimeout(IntakeFoldConstants.DEPLOY_TIME_SECONDS),
+            intakeFold.retractCommand()));
+
     autoChooser = new SendableChooser<>();
     autoRoutines = new AutoRoutines(autoCommands, superstructure, drivetrain, limelight, intake);
 
+    autoChooser.setDefaultOption("MVRLEFT", Commands.defer(
+        () -> AutoBuilder.buildAuto("MVRLEFT"),
+        Set.of(drivetrain)));
     // ---- Vision Autos (primary) ----
     // Alliance is read at enable time — robot backs up until it sees the hub AprilTag,
     // locks on, then shoots. No pre-planned path needed.
-    autoChooser.setDefaultOption("Center Start", autoRoutines.centerStartAuto());
+    autoChooser.addOption("Center Start", autoRoutines.centerStartAuto());
     autoChooser.addOption("Left Start", autoRoutines.leftStartAuto());
     autoChooser.addOption("Right Start", autoRoutines.rightStartAuto());
 
@@ -214,8 +245,11 @@ public class RobotContainer {
     // Reverse — right bumper reverses shooter + feeder to unclog
     operator.rightBumper().whileTrue(superstructure.reverseCommand());
 
-    // Intake — left trigger to intake, left bumper to eject
-    operator.leftTrigger().whileTrue(intake.intake());
+    // Intake — left trigger to intake + fold out, release to fold back up
+    // TODO: re-add intake.intake() once fold motor is confirmed working
+    // operator.leftTrigger().whileTrue(intake.intake());
+    operator.leftTrigger().whileTrue(intakeFold.deployCommand());
+    operator.leftTrigger().onFalse(intakeFold.retractCommand());
     operator.leftBumper().whileTrue(intake.eject());
 
     // D-pad — feeder only (independent of shooter)
