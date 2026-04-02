@@ -108,7 +108,7 @@ public class Shooter extends SubsystemBase {
     // but inverted so both wheels spin opposite directions and grip the ball from both sides.
     TalonFXConfiguration followerConfig = new TalonFXConfiguration();
     followerConfig.MotorOutput.NeutralMode = NeutralModeValue.Coast;
-    followerConfig.MotorOutput.Inverted = InvertedValue.Clockwise_Positive; // opposite of leader
+    followerConfig.MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive; // opposite of leader
     followerConfig.Slot0.kS = ShooterConstants.kS;
     followerConfig.Slot0.kV = ShooterConstants.kV;
     followerConfig.Slot0.kP = ShooterConstants.kP;

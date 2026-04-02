@@ -49,6 +49,7 @@ import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Superstructure;
 import frc.robot.subsystems.climb.Climb;
+import frc.robot.subsystems.intake.ArmRoller;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.intake.IntakeFold;
 import frc.robot.subsystems.shooter.Feeder;
@@ -99,6 +100,7 @@ public class RobotContainer {
   public final Feeder feeder = new Feeder();
   public final Intake intake = new Intake();
   public final IntakeFold intakeFold = new IntakeFold();
+  public final ArmRoller armRoller = new ArmRoller();
 
   private final Superstructure superstructure = new Superstructure(shooter, feeder);
 
@@ -166,12 +168,20 @@ public class RobotContainer {
     autoChooser.setDefaultOption("MVRLEFT", Commands.defer(
         () -> AutoBuilder.buildAuto("MVRLEFT"),
         Set.of(drivetrain)));
-    // ---- Vision Autos (primary) ----
-    // Alliance is read at enable time — robot backs up until it sees the hub AprilTag,
-    // locks on, then shoots. No pre-planned path needed.
-    autoChooser.addOption("Center Start", autoRoutines.centerStartAuto());
-    autoChooser.addOption("Left Start", autoRoutines.leftStartAuto());
-    autoChooser.addOption("Right Start", autoRoutines.rightStartAuto());
+    autoChooser.addOption("MVRRIGHT", Commands.defer(
+        () -> AutoBuilder.buildAuto("MVRRIGHT"),
+        Set.of(drivetrain)));
+    autoChooser.addOption("MVRCENTERBUMP", Commands.defer(
+        () -> AutoBuilder.buildAuto("MVRCENTERBUMP"),
+        Set.of(drivetrain)));
+    autoChooser.addOption("MVRCENTERTRENCH", Commands.defer(
+        () -> AutoBuilder.buildAuto("MVRCENTERTRENCH"),
+        Set.of(drivetrain)));
+
+    // ---- Vision Auto ----
+    autoChooser.addOption("Vision", Commands.defer(
+        () -> autoRoutines.centerStartAuto(),
+        Set.of(drivetrain)));
 
     // ---- PathPlanner Autos (backup) ----
     // Pre-planned paths. Use these if vision auto is not working on the day.
@@ -238,18 +248,18 @@ public class RobotContainer {
             superstructure.teleOpShootWithDistanceCommand(limelight::getAvgTagDistance),
             intake.intake()));
 
-    // Climb — Y to climb up, A to climb down (hold; brakes on release)
-    operator.y().whileTrue(climb.climbUpCommand());
-    operator.a().whileTrue(climb.climbDownCommand());
+    // Intake fold — hold Y to move up, hold A to move down, release to hold in place
+    operator.y().whileTrue(intakeFold.moveUpCommand());
+    operator.a().whileTrue(intakeFold.moveDownCommand());
 
     // Reverse — right bumper reverses shooter + feeder to unclog
     operator.rightBumper().whileTrue(superstructure.reverseCommand());
 
-    // Intake — left trigger to intake + fold out, release to fold back up
-    // TODO: re-add intake.intake() once fold motor is confirmed working
-    // operator.leftTrigger().whileTrue(intake.intake());
-    operator.leftTrigger().whileTrue(intakeFold.deployCommand());
-    operator.leftTrigger().onFalse(intakeFold.retractCommand());
+    // Intake — left trigger to intake + fold out + arm roller, release to fold back up
+    operator.leftTrigger().whileTrue(
+        Commands.parallel(
+            intake.intake(),
+            armRoller.rollInward()));
     operator.leftBumper().whileTrue(intake.eject());
 
     // D-pad — feeder only (independent of shooter)

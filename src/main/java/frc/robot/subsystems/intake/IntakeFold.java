@@ -18,6 +18,13 @@ import frc.robot.Robot;
 import frc.robot.constants.IntakeFoldConstants;
 import frc.robot.utils.TalonFXUtil;
 
+/**
+ * IntakeFold — foldable arm that deploys/retracts the intake mechanism.
+ *
+ * <p>Hold Y to move the arm up, hold A to move it down.
+ * When the button is released the motor stops and brake mode holds
+ * the arm wherever it is.
+ */
 @Logged
 public class IntakeFold extends SubsystemBase {
 
@@ -49,6 +56,43 @@ public class IntakeFold extends SubsystemBase {
     SmartDashboard.putBoolean("IntakeFold/MotorAlive", motor.isAlive());
   }
 
+  // ==================== Commands ====================
+
+  /**
+   * Move the arm upward (retract) while held. Stops on release; brake mode holds position.
+   *
+   * @return Command that runs the motor up while active, stops on cancel
+   */
+  public Command moveUpCommand() {
+    return startEnd(
+            () -> motor.setControl(dutyCycleOut.withOutput(-IntakeFoldConstants.RETRACT_SPEED)),
+            () -> motor.stopMotor())
+        .withName("IntakeFoldMoveUp");
+  }
+
+  /**
+   * Move the arm downward (deploy) while held. Stops on release; brake mode holds position.
+   *
+   * @return Command that runs the motor down while active, stops on cancel
+   */
+  public Command moveDownCommand() {
+    return startEnd(
+            () -> {
+              deploying = true;
+              motor.setControl(dutyCycleOut.withOutput(IntakeFoldConstants.DEPLOY_SPEED));
+            },
+            () -> {
+              deploying = false;
+              motor.stopMotor();
+            })
+        .withName("IntakeFoldMoveDown");
+  }
+
+  /**
+   * Deploy command for left trigger — moves arm down while held, stops on release.
+   *
+   * @return Command that deploys the intake while active
+   */
   public Command deployCommand() {
     return startEnd(
             () -> {
@@ -59,10 +103,15 @@ public class IntakeFold extends SubsystemBase {
               deploying = false;
               motor.stopMotor();
             })
-            .withTimeout(IntakeFoldConstants.DEPLOY_TIME_SECONDS)
+        .withTimeout(IntakeFoldConstants.DEPLOY_TIME_SECONDS)
         .withName("IntakeFoldDeploy");
   }
 
+  /**
+   * Retract command for left trigger release — moves arm up, stops after timeout.
+   *
+   * @return Command that retracts the intake
+   */
   public Command retractCommand() {
     return startEnd(
             () -> motor.setControl(dutyCycleOut.withOutput(-IntakeFoldConstants.RETRACT_SPEED)),

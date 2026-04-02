@@ -27,10 +27,10 @@ public final class ShooterConstants {
   public static final int SHOOTER_LEADER_ID = 5;
 
   /** CAN ID for the second shooter motor (follower, runs opposite direction to grip ball) */
-  public static final int SHOOTER_FOLLOWER_ID = 6;
+  public static final int SHOOTER_FOLLOWER_ID = 7;
 
   /** CAN ID for the feeder motor (feeds balls up to the shooter at slower speed) */
-  public static final int FEEDER_ID = 7;
+  public static final int FEEDER_ID = 6;
 
   // ==================== Shooter Speed ====================
 
@@ -101,18 +101,18 @@ public final class ShooterConstants {
   public static final double[][] TELEOP_DISTANCE_SPEED_MAP = {
     // { distanceMeters, shooterSpeedRPS }
     {0.5,  45.0},   // Very close
-    {1.0,  49.0},   // Close
-    {1.5,  53.0},   // Medium-close
-    {2.0,  57.0},   // Medium
-    {2.5,  70.0},   // Medium-far
-    {3.0,  80.0},   // Far
-    {4.0,  90.0},   // Very far
-    {5.0,  100.0},   // Max range
+    {1.0,  50.0},   // Close
+    {1.5,  55.0},   // Medium-close
+    {2.0,  60.0},   // Medium
+    {2.5,  65.0},   // Medium-far
+    {3.0,  70.0},   // Far
+    {4.0,  75.0},   // Very far
+    {5.0,  80.0},   // Max range
   };
 
   // Fallback speeds when no tag is visible
   public static final double AUTO_FALLBACK_SPEED_RPS = 52.0;
-  public static final double TELEOP_FALLBACK_SPEED_RPS = 57.0;
+  public static final double TELEOP_FALLBACK_SPEED_RPS = 65.0;
 
   // Safety limits
   public static final double MAX_SHOOTER_SPEED_RPS = 85.0;
